@@ -1,2 +1,31 @@
+### Java, Scala, SBT
 *.class
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+# sbt specific
+.cache
+.history
+.lib/
+dist/*
+target/
+/**/target
+lib_managed/
+src_managed/
+project/boot/
+
+# parquet data
+data/
+
+# intellij idea
 *.log
+*.iml
+*.ipr
+*.iws
+.idea
+
+# User-specific stuff:
+.idea/workspace.xml
