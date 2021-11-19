@@ -26,6 +26,7 @@ data/
 *.ipr
 *.iws
 .idea
+.bsp
 
 # User-specific stuff:
 .idea/workspace.xml
