@@ -20,6 +20,9 @@ project/boot/
 # parquet data
 data/
 
+# models data
+data-models/
+
 # intellij idea
 *.log
 *.iml

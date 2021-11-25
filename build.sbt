@@ -18,7 +18,8 @@ lazy val enrichVHSDataDependencies = Seq(
 
 lazy val analyzeVHSDataDependencies = Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
-  "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
+  "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
+  "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided"
 )
 
 lazy val enrichVHSData = (project in file("enrich-vhs-data"))
