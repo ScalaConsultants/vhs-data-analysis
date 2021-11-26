@@ -53,7 +53,7 @@ object VHSDataAnalyzer extends Logging {
 
     val enrichedDataDf = spark
       .read
-      .parquet("data/output/enriched-data")
+      .parquet("data/output/enriched-data/hm_playerbehavior")
       .cache()
 
     val inputKMeansDf = enrichedDataDf
