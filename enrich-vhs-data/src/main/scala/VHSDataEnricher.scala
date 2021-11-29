@@ -1,111 +1,26 @@
 import config.{AppConfig, MongoReaderConfig}
 import model.events.EventsSchema
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.internal.Logging
 import reader.mongo.MongoReader
+import utils.DataEnricherUtil._
 import utils.SchemaOperations._
 
 object VHSDataEnricher extends Logging {
 
-  def createFilterBetweenMonths(date: Column, fromCodMonth: String, toCodMonth :String): Column = {
-    val codMonthFromTimestamp = generateCodMonthFromDate(date)
-    (codMonthFromTimestamp >= fromCodMonth) && (codMonthFromTimestamp <= toCodMonth)
-  }
+  def enrichVHSData(playerInfoData: DataFrame,
+                    playerBehaviorData: DataFrame): (DataFrame, DataFrame) = {
 
-  def generateDateFromTimestamp(timestamp: Column): Column =
-    to_date(from_unixtime(timestamp/1000,"yyyy-MM-dd"))
+    val playersCleanedDf = cleanPlayersData(playerInfoData)
+    val levelsCleanedDf = cleanLevelsData(playerBehaviorData)
+    val addsCleanedDf = cleanAddsData(playerBehaviorData)
+    val purchasesCleanedDf = cleanPurchasesData(playerBehaviorData)
 
-  def generateCodMonthFromDate(date: Column): Column =
-    date_format(date, "yyyyMM")
-
-  def cleanPlayersData(playerInfoDf: DataFrame): DataFrame = {
-    val playersEvents = playerInfoDf.where(col("attribution").isNotNull)
-    playersEvents.select(
-      trim(col("userId")) as "userId",
-      trim(col("gameId")) as "gameId",
-      trim(col("attribution")) as "attribution",
-      trim(col("action")) as "action",
-      col("date")
-    )
-  }
-
-  def cleanLevelsData(playerBehaviorDf: DataFrame): DataFrame = {
-    val levelsEvents = playerBehaviorDf.where(col("levelId").isNotNull)
-    levelsEvents.select(
-      trim(col("userId")) as "userId",
-      trim(col("gameId")) as "gameId",
-      trim(col("levelId")) as "levelId",
-      col("levelDifficulty"),
-      col("levelProgress"),
-      trim(col("status")) as "status",
-      col("date")
-    )
-  }
-
-  def cleanAddsData(playerBehaviorDf: DataFrame): DataFrame = {
-    val addsEvents = playerBehaviorDf.where(col("adType").isNotNull)
-    addsEvents.select(
-      trim(col("userId")) as "userId",
-      trim(col("gameId")) as "gameId",
-      col("placementId"),
-      trim(col("adType")) as "adType",
-      trim(col("status")) as "status",
-      col("date")
-    )
-  }
-
-  def cleanPurchasesData(playerBehaviorDf: DataFrame): DataFrame = {
-    val purchasesEvents =  playerBehaviorDf.where(col("amount").isNotNull)
-    purchasesEvents.select(
-      trim(col("userId")) as "userId",
-      trim(col("gameId")) as "gameId",
-      trim(col("itemId")) as "itemId",
-      trim(col("category")) as "category",
-      col("amount"),
-      trim(col("currency")) as "currency",
-      trim(col("status")) as "status",
-      col("date")
-    )
-  }
-
-  def enrichVHSData(playersCleanedDf: DataFrame,
-                    levelsCleanedDf: DataFrame,
-                    addsCleanedDf: DataFrame,
-                    purchasesCleanedDf: DataFrame): (DataFrame, DataFrame) = {
-    val playersEnrichDataDf = playersCleanedDf
-      .where(col("action")==="SIGN_UP")
-      .groupBy("userId","gameId")
-      .agg(
-        max(when(col("attribution") === "organic", lit(1)).otherwise(lit(0))) as "flagOrganic",
-        min("date") as "dateRegistration"
-      )
-
-    val levelsEnrichDataDf = levelsCleanedDf
-      .groupBy("userId", "gameId", "date")
-      .agg(
-        sum(when(col("status") === "COMPLETED", lit(1)).otherwise(lit(0))) as "numLevelsCompleted",
-        sum(when(col("status") === "STARTED", lit(1)).otherwise(lit(0))) as "numLevelsStarted"
-      )
-
-    val addsEnrichDataDf = addsCleanedDf
-      .groupBy("userId", "gameId", "date")
-      .agg(
-        sum(when(col("status") === "WATCHED", lit(1)).otherwise(lit(0))) as "numAddsWatched",
-        sum(when(col("status") === "IGNORED", lit(1)).otherwise(lit(0))) as "numAddsIgnored",  //-- Bug in the game
-        sum(when(col("status") === "PROPOSED", lit(1)).otherwise(lit(0))) as "numAddsProposed"  //-- Not implemented yet in the game
-      )
-
-    val purchasesEnrichDataDf = purchasesCleanedDf
-      .groupBy("userId", "gameId", "date")
-      .agg(
-        sum(when(col("status")=== "DONE", lit(1)).otherwise(lit(0))) as "numPurchasesDone",
-        sum(when(col("status")=== "DONE", col("amount")).otherwise(lit(0))) as "amountPurchasesDoneDol",
-        sum(when(col("status")=== "REJECTED", lit(1)).otherwise(lit(0))) as "numPurchasesRejected",
-        sum(when(col("status")=== "REJECTED", col("amount")).otherwise(lit(0))) as "amountPurchasesRejectedDol",
-        sum(when(col("status")=== "CANCELED", lit(1)).otherwise(lit(0))) as "numPurchasesCanceled",
-        sum(when(col("status")=== "CANCELED", col("amount")).otherwise(lit(0))) as "amountPurchasesCanceledDol"
-      )
+    val playersEnrichDataDf = enrichPlayersData(playersCleanedDf)
+    val levelsEnrichDataDf = enrichLevelsData(levelsCleanedDf)
+    val addsEnrichDataDf = enrichAddsData(addsCleanedDf)
+    val purchasesEnrichDataDf = enrichPurchasesData(purchasesCleanedDf)
 
     playersEnrichDataDf.show(5)
     levelsEnrichDataDf.show(5)
@@ -196,12 +111,7 @@ object VHSDataEnricher extends Logging {
             .filter(createFilterBetweenMonths(col("date"), "202101", "202112"))
             .cache()
 
-        val playersCleanedDf = cleanPlayersData(playerInfoData)
-        val levelsCleanedDf = cleanLevelsData(playerBehaviorData)
-        val addsCleanedDf = cleanAddsData(playerBehaviorData)
-        val purchasesCleanedDf = cleanPurchasesData(playerBehaviorData)
-
-        val (vhsEnrichedPerDayDf, vhsEnrichedPerMonthDf) = enrichVHSData(playersCleanedDf, levelsCleanedDf, addsCleanedDf, purchasesCleanedDf)
+        val (vhsEnrichedPerDayDf, vhsEnrichedPerMonthDf) = enrichVHSData(playerInfoData, playerBehaviorData)
 
         vhsEnrichedPerDayDf
           .write
