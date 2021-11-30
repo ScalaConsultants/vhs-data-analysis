@@ -17,6 +17,9 @@ lib_managed/
 src_managed/
 project/boot/
 
+# worksheets
+*.sc
+
 # parquet data
 data/
 

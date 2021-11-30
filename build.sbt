@@ -10,10 +10,15 @@ lazy val commonSettings = Seq(
 lazy val sparkVersion = "3.2.0"
 lazy val sparkMongoConnectorVersion = "3.0.1"
 
-lazy val enrichVHSDataDependencies = Seq(
+lazy val commonAppDependencies = Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
   "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
   "org.mongodb.spark" %% "mongo-spark-connector" % sparkMongoConnectorVersion
+)
+
+lazy val enrichVHSDataDependencies = Seq(
+  "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
+  "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
 )
 
 lazy val analyzeVHSDataDependencies = Seq(
@@ -21,6 +26,11 @@ lazy val analyzeVHSDataDependencies = Seq(
   "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
   "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided"
 )
+
+lazy val commonSource = (project in file("common-source"))
+  .settings(commonSettings: _*)
+  .settings(name := "common-source")
+  .settings(libraryDependencies ++= commonAppDependencies)
 
 lazy val enrichVHSData = (project in file("enrich-vhs-data"))
   .settings(commonSettings: _*)
@@ -34,6 +44,7 @@ lazy val enrichVHSData = (project in file("enrich-vhs-data"))
     assembly / assemblyJarName := "enrich-vhs-data.jar",
     assembly / mainClass := Some("VHSDataEnricher")
   )
+  .dependsOn(commonSource)
 
 lazy val analyzeVHSData = (project in file("analyze-vhs-data"))
   .settings(commonSettings: _*)
@@ -47,3 +58,4 @@ lazy val analyzeVHSData = (project in file("analyze-vhs-data"))
     assembly / assemblyJarName := "analyze-vhs-data.jar",
     assembly / mainClass := Some("VHSDataAnalyzer")
   )
+  .dependsOn(commonSource)

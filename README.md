@@ -13,12 +13,20 @@ How to execute locally the vhs-data-enricher module (jar 1)
     --class "VHSDataEnricher" \
     --master local[4] \
     enrich-vhs-data/target/scala-2.12/enrich-vhs-data.jar \
-    [MongoUriHere] \
-    "vhs" \
-    "events"
+    --behavior=[daily | monthly | both] \
+    --mongoUri=[MongoUriHere] \
+    --database=vhs \
+    --collection=events
+    --fromDate=202101
+    --toDate=202112
 
 How to execute locally the vhs-data-analyzer module (jar 2)
 > [YourSparkPathHere]/bin/spark-submit \
     --class "VHSDataAnalyzer" \
     --master local[4] \
-    analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar
+    analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
+    --behavior=[daily | monthly] \
+    --mainPath=data/output \
+    --folderName=enriched-data \
+    --fromDate=202101 \
+    --toDate=202112

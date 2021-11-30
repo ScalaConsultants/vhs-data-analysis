@@ -4,8 +4,11 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.Pipeline
-
+import utils.DateColumnOperations.{createFilterBetweenCodMonths, createFilterBetweenDates}
 import scala.util.Random
+import reader.file.LocalFileReader
+import config._
+import model._
 
 object VHSDataAnalyzer extends Logging {
 
@@ -44,61 +47,83 @@ object VHSDataAnalyzer extends Logging {
   }
 
   def main(args: Array[String]): Unit = {
-    val spark = SparkSession.builder()
-      .master("local[*]")
-      .appName("VHSDataAnalyzer")
-      .getOrCreate()
+    AppConfig.load(args) match {
+      case Right(AppConfig(localFileReaderConfig: LocalFileReaderConfig, behavior@(Daily | Monthly), dateRange)) =>
+        val spark = SparkSession.builder()
+          .master("local[*]")
+          .appName("VHSDataAnalyzer")
+          .getOrCreate()
 
-    log.info("read vhs enriched data")
+        log.info("read vhs enriched data")
 
-    val enrichedDataDf = spark
-      .read
-      .parquet("data/output/enriched-data/hm_playerbehavior")
-      .cache()
+        val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
 
-    val inputKMeansDf = enrichedDataDf
-      .select(
-        col("userId"),
-        col("gameId"),
-        col("numLevelsCompleted"),
-        col("numAddsWatched"),
-        col("numPurchasesDone"),
-        col("numPurchasesCanceled"),
-        col("codMonth")
-      ).cache()
+        val (partitionSource, fileNameSource, enrichedDataSchema, filterByPartition) = behavior match {
+          case Daily => ("date", "hd_playerbehavior", EnrichedDataPerDay.generateSchema, createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate))
+          case _ => ("codMonth", "hm_playerbehavior", EnrichedDataPerMonth.generateSchema, createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate))
+        }
 
-    log.info("segmentation of vhs data")
+        val enrichedDataDf = localFileReader
+          .read(
+            localFileReaderConfig.folderName,
+            fileNameSource,
+            enrichedDataSchema
+          )
+        val inputKMeansDf = enrichedDataDf
+          .select(
+            col("userId"),
+            col("gameId"),
+            col("numLevelsCompleted"),
+            col("numAddsWatched"),
+            col("numPurchasesDone"),
+            col("numPurchasesCanceled"),
+            col(partitionSource)
+          )
+          .where(filterByPartition(col(partitionSource)))
+          .cache()
 
-    val clustersK = 4
-    val iterationsK = 50
-    val tolK = 1.0e-5
+        log.info("segmentation of vhs data")
 
-    val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "numPurchasesCanceled"))
-      .setOutputCol("featureVector")
+        val clustersK = 4
+        val iterationsK = 50
+        val tolK = 1.0e-5
 
-    val kMeans = new KMeans()
-      .setSeed(Random.nextLong())
-      .setK(clustersK)
-      .setPredictionCol("cluster")
-      .setFeaturesCol("featureVector")
-      .setMaxIter(iterationsK)
-      .setTol(tolK)
+        val vectorAssembler = new VectorAssembler()
+          .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "numPurchasesCanceled"))
+          .setOutputCol("featureVector")
 
-    val pipeline = new Pipeline().setStages(Array(vectorAssembler, kMeans))
-    val pipelineModel = pipeline.fit(inputKMeansDf)
-    val kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
-    val kmResult = pipelineModel.transform(inputKMeansDf).cache()
+        val kMeans = new KMeans()
+          .setSeed(Random.nextLong())
+          .setK(clustersK)
+          .setPredictionCol("cluster")
+          .setFeaturesCol("featureVector")
+          .setMaxIter(iterationsK)
+          .setTol(tolK)
 
-    displayClusterMetrics(kmResult, clustersK)
-    printClusterCenters(kmModel)
+        val pipeline = new Pipeline().setStages(Array(vectorAssembler, kMeans))
+        val pipelineModel = pipeline.fit(inputKMeansDf)
+        val kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
+        val kmResult = pipelineModel.transform(inputKMeansDf).cache()
 
-    // Save model result
-    kmModel.save("data-models/output/cluster-model")
+        // Save model result
+        kmModel
+          .write
+          .overwrite()
+          .save("data-models/output/cluster-model")
 
-    // Save enriched data with cluster
-    kmResult.write.mode("overwrite").partitionBy("codMonth").parquet("data-models/output/cluster-data")
+        // Save enriched data with cluster
+        kmResult.write.mode("overwrite").partitionBy(partitionSource).parquet("data-models/output/cluster-data")
 
-    spark.stop()
+        displayClusterMetrics(kmResult, clustersK)
+        printClusterCenters(kmModel)
+
+        spark.stop()
+      case Right(AppConfig(_: LocalFileReaderConfig, Both, _)) =>
+        log.warn("This module doesn't support daily and monthly behavior at the same time")
+      case Right(AppConfig(_: MongoReaderConfig, _, _)) =>
+        log.warn("This module doesn't support mongoReader")
+      case Left(exMsg) =>
+        log.warn(s"Problem while loading appConfig - $exMsg")
+    }
   }
 }
