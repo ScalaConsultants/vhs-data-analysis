@@ -2,18 +2,18 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
-import org.apache.spark.ml.feature.VectorAssembler
-import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
+import org.apache.spark.ml.{Pipeline, PipelineModel}
 import utils.DateColumnOperations.{createFilterBetweenCodMonths, createFilterBetweenDates}
-import scala.util.Random
 import reader.file.LocalFileReader
 import config._
 import model._
 
 object VHSDataAnalyzer extends Logging {
+  final case class KMeansCost(kCluster: Int, costTraining: Double)
 
   def showMetrics(enrichedDf: DataFrame): Unit = {
-    val metricsDf = enrichedDf.select("numLevelsCompleted","numAddsWatched", "numPurchasesDone")
+    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "flagOrganic")
     metricsDf
       .summary("count", "min", "mean", "max")
       .show()
@@ -46,9 +46,66 @@ object VHSDataAnalyzer extends Logging {
     }
   }
 
+  def getModelForKMeans(kmeansInput: DataFrame, kClusters: Int, kIter: Int = 30): PipelineModel ={
+    val vectorAssembler = new VectorAssembler()
+      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "flagOrganic"))
+      .setOutputCol("featureVector")
+
+    val scaler = new StandardScaler()
+      .setInputCol("featureVector")
+      .setOutputCol("scaledFeatures")
+
+    val kMeans = new KMeans()
+      .setSeed(1L)
+      .setK(kClusters)
+      .setPredictionCol("cluster")
+      .setFeaturesCol("scaledFeatures")
+      .setMaxIter(kIter)
+
+    val pipeline = new Pipeline().setStages(Array(vectorAssembler, scaler, kMeans))
+
+    pipeline.fit(kmeansInput)
+  }
+
+  def showClusterCostForElbowMethod(inputKMeansDf: DataFrame, fromK: Int, toK: Int): Unit = {
+    val kMeansCosts = for {
+      kCluster <- (fromK to toK).toList
+      pipelineModel = getModelForKMeans(inputKMeansDf, kCluster)
+      kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
+      kMeansCost = kmModel.summary.trainingCost
+    } yield KMeansCost(kCluster, kMeansCost)
+
+    log.info(s"kMeans clusters: ${kMeansCosts.map(_.kCluster).toString}")
+    log.info(s"kMeans costs: ${kMeansCosts.map(_.costTraining).toString}")
+  }
+
+  def showAndSaveKMeansResults(inputKMeansDf: DataFrame, kCluster: Int, partitionSource: String): Unit  = {
+    val bestKCluster = 8
+    val pipelineModel = getModelForKMeans(inputKMeansDf, kCluster)
+    val kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
+
+    val kmResult = pipelineModel
+      .transform(inputKMeansDf)
+      .cache()
+
+    // Save model result
+    kmModel
+      .write
+      .overwrite()
+      .save("data-models/output/cluster-model")
+
+    // Save enriched data with cluster
+    kmResult.write.mode("overwrite").partitionBy(partitionSource).parquet("data-models/output/cluster-data")
+
+    // Show results
+    displayClusterMetrics(kmResult, bestKCluster)
+    printClusterCenters(kmModel)
+
+  }
+
   def main(args: Array[String]): Unit = {
-    AppConfig.load(args) match {
-      case Right(AppConfig(localFileReaderConfig: LocalFileReaderConfig, behavior@(Daily | Monthly), dateRange)) =>
+    AppConfig.loadAnalyzerConfig(args) match {
+      case Right(AnalyzerAppConfig(localFileReaderConfig: LocalFileReaderConfig, methodAnalyzer, behavior@(Daily | Monthly), dateRange)) =>
         val spark = SparkSession.builder()
           .master("local[*]")
           .appName("VHSDataAnalyzer")
@@ -76,51 +133,24 @@ object VHSDataAnalyzer extends Logging {
             col("numLevelsCompleted"),
             col("numAddsWatched"),
             col("numPurchasesDone"),
-            col("numPurchasesCanceled"),
+            col("flagOrganic"),
             col(partitionSource)
           )
           .where(filterByPartition(col(partitionSource)))
           .cache()
 
-        log.info("segmentation of vhs data")
-
-        val clustersK = 4
-        val iterationsK = 50
-        val tolK = 1.0e-5
-
-        val vectorAssembler = new VectorAssembler()
-          .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "numPurchasesCanceled"))
-          .setOutputCol("featureVector")
-
-        val kMeans = new KMeans()
-          .setSeed(Random.nextLong())
-          .setK(clustersK)
-          .setPredictionCol("cluster")
-          .setFeaturesCol("featureVector")
-          .setMaxIter(iterationsK)
-          .setTol(tolK)
-
-        val pipeline = new Pipeline().setStages(Array(vectorAssembler, kMeans))
-        val pipelineModel = pipeline.fit(inputKMeansDf)
-        val kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
-        val kmResult = pipelineModel.transform(inputKMeansDf).cache()
-
-        // Save model result
-        kmModel
-          .write
-          .overwrite()
-          .save("data-models/output/cluster-model")
-
-        // Save enriched data with cluster
-        kmResult.write.mode("overwrite").partitionBy(partitionSource).parquet("data-models/output/cluster-data")
-
-        displayClusterMetrics(kmResult, clustersK)
-        printClusterCenters(kmModel)
+        methodAnalyzer match {
+          case ElbowAnalyzer(fromK, toK) =>
+            showClusterCostForElbowMethod(inputKMeansDf, fromK, toK)
+          case KMeansAnalyzer(k) =>
+            log.info("segmentation of vhs data")
+            showAndSaveKMeansResults(inputKMeansDf, k, partitionSource)
+        }
 
         spark.stop()
-      case Right(AppConfig(_: LocalFileReaderConfig, Both, _)) =>
+      case Right(AnalyzerAppConfig(_: LocalFileReaderConfig, _, Both, _)) =>
         log.warn("This module doesn't support daily and monthly behavior at the same time")
-      case Right(AppConfig(_: MongoReaderConfig, _, _)) =>
+      case Right(AnalyzerAppConfig(_: MongoReaderConfig, _, _, _)) =>
         log.warn("This module doesn't support mongoReader")
       case Left(exMsg) =>
         log.warn(s"Problem while loading appConfig - $exMsg")

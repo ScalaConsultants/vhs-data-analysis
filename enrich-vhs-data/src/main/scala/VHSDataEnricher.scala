@@ -11,8 +11,8 @@ object VHSDataEnricher extends Logging {
   import DataEnricherLogic._
 
   def main(args: Array[String]) = {
-    AppConfig.load(args) match {
-      case Right(AppConfig(mongoReaderConfig :MongoReaderConfig, behavior, dateRange)) =>
+    AppConfig.loadEnrichedConfig(args) match {
+      case Right(EnricherAppConfig(mongoReaderConfig :MongoReaderConfig, behavior, dateRange)) =>
         val spark = SparkSession.builder()
           .master("local[*]")
           .appName("VHSDataAnalyzer")
@@ -51,7 +51,7 @@ object VHSDataEnricher extends Logging {
         enrichVHSData(behavior, playerInfoData, playerBehaviorData, "data/output/enriched-data")
 
         spark.stop()
-      case Right(AppConfig(_ :LocalFileReaderConfig, _, _)) =>
+      case Right(EnricherAppConfig(_ :LocalFileReaderConfig, _, _)) =>
         log.warn("This module doesn't support localFileReader")
       case Left(exMsg) =>
         log.warn(s"Problem while loading appConfig - $exMsg")

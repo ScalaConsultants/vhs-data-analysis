@@ -21,6 +21,7 @@ How to execute locally the vhs-data-enricher module (jar 1)
     --toDate=202112
 
 How to execute locally the vhs-data-analyzer module (jar 2)
+- Elbow method to determine the best number of cluster for the kMeans algorithm
 > [YourSparkPathHere]/bin/spark-submit \
     --class "VHSDataAnalyzer" \
     --master local[4] \
@@ -29,4 +30,20 @@ How to execute locally the vhs-data-analyzer module (jar 2)
     --mainPath=data/output \
     --folderName=enriched-data \
     --fromDate=202101 \
-    --toDate=202112
+    --toDate=202112 \
+    --method=elbow \
+    --fromK=3 \
+    --toK=30
+
+- KMeans method to segment the data in k cluster
+> [YourSparkPathHere]/bin/spark-submit \
+   --class "VHSDataAnalyzer" \
+   --master local[4] \
+   analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
+   --behavior=[daily | monthly] \
+   --mainPath=data/output \
+   --folderName=enriched-data \
+   --fromDate=202101 \
+   --toDate=202112 \
+   --method=k-means \
+   --k=8
