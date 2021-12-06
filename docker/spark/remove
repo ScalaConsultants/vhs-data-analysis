@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+. config/env.sh
+
+docker stop "${SPARK_CONTAINER_NAME}" || true
+docker rm "${SPARK_CONTAINER_NAME}" || true

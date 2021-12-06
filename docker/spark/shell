@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+
+. config/env.sh
+
+docker exec -it "${SPARK_CONTAINER_NAME}" bash

@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+. config/env.sh
+
+# shellcheck disable=SC2046
+. $(pwd)/remove
+# shellcheck disable=SC2046
+. $(pwd)/run

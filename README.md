@@ -6,10 +6,22 @@ This project use spark 3.2 with Scala to:
 How to build and create the jars enrich-vhs-data.jar(1) and analyze-vhs-data.jar(2)
 > sbt clean compile assembly
 
-Spark 3.2 is needed to run this project -> https://spark.apache.org/downloads.html
+Docker is needed to run this project
+
+Go to spark docker directory
+> cd [PROJECT_PATH]/docker/spark
+
+Build spark docker from Dockerfile:
+> docker build -t scalac/spark .
+
+Run spark container
+> sh run 
+
+Enter the spark container
+> sh shell
 
 How to execute locally the vhs-data-enricher module (jar 1) 
-> [YourSparkPathHere]/bin/spark-submit \
+> spark-submit \
     --class "VHSDataEnricher" \
     --master local[4] \
     enrich-vhs-data/target/scala-2.12/enrich-vhs-data.jar \
@@ -22,7 +34,7 @@ How to execute locally the vhs-data-enricher module (jar 1)
 
 How to execute locally the vhs-data-analyzer module (jar 2)
 - Elbow method to determine the best number of cluster for the kMeans algorithm
-> [YourSparkPathHere]/bin/spark-submit \
+> spark-submit \
     --class "VHSDataAnalyzer" \
     --master local[4] \
     analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
@@ -36,7 +48,7 @@ How to execute locally the vhs-data-analyzer module (jar 2)
     --toK=30
 
 - KMeans method to segment the data in k cluster
-> [YourSparkPathHere]/bin/spark-submit \
+> spark-submit \
    --class "VHSDataAnalyzer" \
    --master local[4] \
    analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \

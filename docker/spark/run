@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+. config/env.sh
+
+cd ../..
+
+# shellcheck disable=SC2046
+docker run -t -d -p 8080:8080 --name="${SPARK_CONTAINER_NAME}" -v $(pwd):"${SHARED_WORKSPACE}" "${SPARK_IMAGE}"
