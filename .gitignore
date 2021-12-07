@@ -26,6 +26,9 @@ data/
 # models data
 data-models/
 
+#plots
+plots/
+
 # intellij idea
 *.log
 *.iml

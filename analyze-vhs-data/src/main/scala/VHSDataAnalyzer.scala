@@ -4,6 +4,10 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
 import org.apache.spark.ml.{Pipeline, PipelineModel}
+import plotly._
+import plotly.element._
+import plotly.layout._
+import plotly.Plotly._
 import utils.DateColumnOperations.{createFilterBetweenCodMonths, createFilterBetweenDates}
 import reader.file.LocalFileReader
 import config._
@@ -75,8 +79,14 @@ object VHSDataAnalyzer extends Logging {
       kMeansCost = kmModel.summary.trainingCost
     } yield KMeansCost(kCluster, kMeansCost)
 
-    log.info(s"kMeans clusters: ${kMeansCosts.map(_.kCluster).toString}")
-    log.info(s"kMeans costs: ${kMeansCosts.map(_.costTraining).toString}")
+    val xCluster = kMeansCosts.map(_.kCluster)
+    val yCostTraining = kMeansCosts.map(_.costTraining)
+
+    val plot = Seq(
+      Scatter(xCluster, yCostTraining).withName("CostTraining vs k")
+    )
+    val lay = Layout().withTitle("Elbow method")
+    plot.plot(s"plots/elbowFrom${fromK}To${toK}", lay)
   }
 
   def showAndSaveKMeansResults(inputKMeansDf: DataFrame, kCluster: Int, partitionSource: String): Unit  = {
@@ -89,7 +99,7 @@ object VHSDataAnalyzer extends Logging {
       .cache()
 
     // Save model result
-    kmModel
+    pipelineModel
       .write
       .overwrite()
       .save("data-models/output/cluster-model")
