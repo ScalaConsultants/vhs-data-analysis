@@ -19,6 +19,7 @@ case class EnrichedDataPerDay(userId: String,
                               amountPurchasesRejectedDol: Double,
                               numPurchasesCanceled: Long,
                               amountPurchasesCanceledDol: Double,
+                              partOfDay: String,
                               date: Date
                              )
 

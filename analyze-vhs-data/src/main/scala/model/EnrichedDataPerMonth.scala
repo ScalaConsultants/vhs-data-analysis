@@ -19,6 +19,7 @@ case class EnrichedDataPerMonth(userId: String,
                                 amountPurchasesRejectedDol: Double,
                                 numPurchasesCanceled: Long,
                                 amountPurchasesCanceledDol: Double,
+                                partOfDay: String,
                                 codMonth: Int
                                )
 

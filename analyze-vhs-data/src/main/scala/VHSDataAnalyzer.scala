@@ -1,11 +1,10 @@
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import plotly._
-import plotly.element._
 import plotly.layout._
 import plotly.Plotly._
 import utils.DateColumnOperations.{createFilterBetweenCodMonths, createFilterBetweenDates}
@@ -17,7 +16,7 @@ object VHSDataAnalyzer extends Logging {
   final case class KMeansCost(kCluster: Int, costTraining: Double)
 
   def showMetrics(enrichedDf: DataFrame): Unit = {
-    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "flagOrganic")
+    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDay", "flagOrganic")
     metricsDf
       .summary("count", "min", "mean", "max")
       .show()
@@ -52,7 +51,7 @@ object VHSDataAnalyzer extends Logging {
 
   def getModelForKMeans(kmeansInput: DataFrame, kClusters: Int, kIter: Int = 30): PipelineModel ={
     val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "flagOrganic"))
+      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDay" ,"flagOrganic"))
       .setOutputCol("featureVector")
 
     val scaler = new StandardScaler()
@@ -90,7 +89,6 @@ object VHSDataAnalyzer extends Logging {
   }
 
   def showAndSaveKMeansResults(inputKMeansDf: DataFrame, kCluster: Int, partitionSource: String): Unit  = {
-    val bestKCluster = 8
     val pipelineModel = getModelForKMeans(inputKMeansDf, kCluster)
     val kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
 
@@ -105,12 +103,19 @@ object VHSDataAnalyzer extends Logging {
       .save("data-models/output/cluster-model")
 
     // Save enriched data with cluster
-    kmResult.write.mode("overwrite").partitionBy(partitionSource).parquet("data-models/output/cluster-data")
+    kmResult.write.mode("overwrite").partitionBy(partitionSource, "partOfDay").parquet("data-models/output/cluster-data")
 
     // Show results
-    displayClusterMetrics(kmResult, bestKCluster)
+    displayClusterMetrics(kmResult, kCluster)
     printClusterCenters(kmModel)
 
+  }
+
+  def transformPartOfDay(partOfDay: Column): Column = {
+    when(partOfDay==="morning", lit(0))
+      .when(partOfDay==="afternoon", lit(1))
+      .when(partOfDay==="evening", lit(2))
+      .when(partOfDay==="night", lit(3))
   }
 
   def main(args: Array[String]): Unit = {
@@ -143,6 +148,7 @@ object VHSDataAnalyzer extends Logging {
             col("numLevelsCompleted"),
             col("numAddsWatched"),
             col("numPurchasesDone"),
+            transformPartOfDay(col("partOfDay")) as "partOfDay",
             col("flagOrganic"),
             col(partitionSource)
           )
