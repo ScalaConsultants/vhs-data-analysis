@@ -28,10 +28,10 @@ object DataEnricherUtil {
 
   def getMonthlyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_MONTHLY_RESULT"
 
-  def saveEnrichedData(enrichedData: DataFrame, partition: String, path:String): Unit =
+  def saveEnrichedData(enrichedData: DataFrame, partitions: Seq[String], path:String): Unit =
     enrichedData
       .write
       .mode("overwrite")
-      .partitionBy(partition)
+      .partitionBy(partitions: _*)
       .parquet(path)
 }

@@ -44,7 +44,8 @@ object VHSDataEnricher extends Logging {
               playerBehaviorSchema
             )
             .where(col("levelId").isNotNull || col("adType").isNotNull || col("amount").isNotNull)
-            .withColumn("date", generateDateFromTimestamp(col("timestamp")))
+            .withColumn("datetime", generateDateTimeFromTimestamp(col("timestamp")))
+            .withColumn("date", generateDateFromDateTime(col("datetime")))
             .filter(createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate))
             .cache()
 
