@@ -14,7 +14,6 @@ import config._
 import model._
 
 object LTVAnalyzer extends Logging {
-  final case class KMeansCost(kCluster: Int, costTraining: Double)
 
   def getModelForKMeans(kmeansInput: DataFrame, kClusters: Int, kIter: Int = 30): PipelineModel ={
     val vectorAssembler = new VectorAssembler()
