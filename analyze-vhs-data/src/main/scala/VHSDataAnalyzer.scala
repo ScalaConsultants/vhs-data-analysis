@@ -37,7 +37,8 @@ object VHSDataAnalyzer extends Logging {
         col("numLevelsCompleted"),
         col("numAddsWatched"),
         col("numPurchasesDone"),
-        transformPartOfDayToNumber(col("partOfDay")) as "partOfDay",
+        col("partOfDay"),
+        transformPartOfDayToNumber(col("partOfDay")) as "partOfDayNumber",
         col("flagOrganic"),
         col(partitionSource)
       )

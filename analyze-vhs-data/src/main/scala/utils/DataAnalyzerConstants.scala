@@ -5,5 +5,5 @@ object DataAnalyzerConstants {
   val MONTHLY_PARTITION = "codmonth"
 
   val DAILY_PLAYER_FILE = "hd_playerbehavior"
-  val MONTHLY_PLAYER_FILE = "hM_playerbehavior"
+  val MONTHLY_PLAYER_FILE = "hm_playerbehavior"
 }

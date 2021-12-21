@@ -10,7 +10,8 @@ final case class PurchaseEvent(userId: String,
                                amount: Double,
                                currency: String,
                                status: String,
-                               timestamp: Long
+                               timestamp: Long,
+                               timezone: String
                               )
 
 object PurchaseEvent extends SchemaGenerator {

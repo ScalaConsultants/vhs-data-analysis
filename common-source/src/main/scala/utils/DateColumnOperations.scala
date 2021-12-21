@@ -21,8 +21,9 @@ object DateColumnOperations {
   def generateCodMonthFromDate(date: Column): Column =
     date_format(date, "yyyyMM")
 
-  def generatePartOfDayFromDateTime(datetime: Column): Column = {
-    val hourOfDay = hour(datetime)
+  def generatePartOfDayFromDateTime(datetime: Column, timezone: Column): Column = {
+    val datetimeWithTimezone = from_utc_timestamp(datetime, timezone)
+    val hourOfDay = hour(datetimeWithTimezone)
     when((hourOfDay>=5) && (hourOfDay<12), lit("morning"))
       .when((hourOfDay>=12) && (hourOfDay<17), lit("afternoon"))
       .when((hourOfDay>=17) && (hourOfDay<21), lit("evening"))
