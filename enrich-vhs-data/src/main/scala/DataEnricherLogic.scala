@@ -2,7 +2,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.DataFrame
 import utils.DateColumnOperations._
-import DataEnricherUtil._
+import utils.DataEnricherUtil._
 import config._
 
 object DataEnricherLogic extends Logging {

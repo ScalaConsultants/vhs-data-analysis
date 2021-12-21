@@ -1,7 +1,10 @@
+package utils
+
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Column, DataFrame}
-import org.apache.spark.sql.functions._
 
 object DataEnricherUtil {
+
   import DataEnricherConstants._
 
   def isNewPlayer: Column = col("action") === PLAYER_SIGNUP
@@ -18,17 +21,17 @@ object DataEnricherUtil {
 
   def isAddProposed: Column = col("status") === ADD_PROPOSED
 
-  def isPurchaseDone: Column = col("status")=== PURCHASE_DONE
+  def isPurchaseDone: Column = col("status") === PURCHASE_DONE
 
-  def isPurchaseRejected: Column = col("status")=== PURCHASE_REJECTED
+  def isPurchaseRejected: Column = col("status") === PURCHASE_REJECTED
 
-  def isPurchaseCanceled: Column = col("status")=== PURCHASE_CANCELED
+  def isPurchaseCanceled: Column = col("status") === PURCHASE_CANCELED
 
   def getDailyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_DAILY_RESULT"
 
   def getMonthlyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_MONTHLY_RESULT"
 
-  def saveEnrichedData(enrichedData: DataFrame, partitions: Seq[String], path:String): Unit =
+  def saveEnrichedData(enrichedData: DataFrame, partitions: Seq[String], path: String): Unit =
     enrichedData
       .write
       .mode("overwrite")

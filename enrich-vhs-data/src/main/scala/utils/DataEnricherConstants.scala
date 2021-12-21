@@ -1,3 +1,5 @@
+package utils
+
 object DataEnricherConstants {
   val PLAYER_SIGNUP = "SIGN_UP"
   val PLAYER_ORGANIC = "organic"
