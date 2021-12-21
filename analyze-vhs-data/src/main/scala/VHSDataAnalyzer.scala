@@ -1,121 +1,47 @@
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.internal.Logging
-import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
-import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
-import org.apache.spark.ml.{Pipeline, PipelineModel}
-import plotly._
-import plotly.layout._
-import plotly.Plotly._
-import utils.DateColumnOperations.{createFilterBetweenCodMonths, createFilterBetweenDates}
 import reader.file.LocalFileReader
+import utils.DateColumnOperations._
+import utils.DataAnalyzerUtil._
 import config._
+import methods._
 import model._
 
+
 object VHSDataAnalyzer extends Logging {
-  final case class KMeansCost(kCluster: Int, costTraining: Double)
 
-  def showMetrics(enrichedDf: DataFrame): Unit = {
-    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDay", "flagOrganic")
-    metricsDf
-      .summary("count", "min", "mean", "max")
-      .show()
-  }
+  def readEnrichedData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRange: CodMonthRange): DataFrame = {
+    log.info("read vhs enriched data")
 
-  def printClusterCenters(model:KMeansModel): Unit = {
-    val clCenters = model.clusterCenters
-    println("clusters centers")
-    clCenters.foreach(println)
-  }
+    val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
 
-  def displayClusterMetrics(kmResult: DataFrame, clustersK: Int): Unit = {
-    val clustersMetrics = kmResult
+    val (enrichedDataSchema, filterByPartition) = behavior match {
+      case Daily => (EnrichedDataPerDay.generateSchema, createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate))
+      case _ => (EnrichedDataPerMonth.generateSchema, createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate))
+    }
+    val fileNameSource = getFileNameFromBehavior(behavior)
+    val partitionSource = getPartitionSourceFromBehavior(behavior)
+
+    val enrichedDataDf = localFileReader
+      .read(
+        localFileReaderConfig.folderName,
+        fileNameSource,
+        enrichedDataSchema
+      )
+
+    enrichedDataDf
       .select(
         col("userId"),
-        col("cluster")
+        col("gameId"),
+        col("numLevelsCompleted"),
+        col("numAddsWatched"),
+        col("numPurchasesDone"),
+        transformPartOfDayToNumber(col("partOfDay")) as "partOfDay",
+        col("flagOrganic"),
+        col(partitionSource)
       )
-      .groupBy("cluster")
-      .agg(
-        countDistinct("userId") as "numberOfUsers"
-      )
-      .orderBy("cluster")
-
-    clustersMetrics.show()
-
-    (0 until clustersK).foreach { clusterK =>
-      val clusterResultK = kmResult.where(col("cluster") === clusterK)
-      showMetrics(clusterResultK)
-      clusterResultK.show(20)
-    }
-  }
-
-  def getModelForKMeans(kmeansInput: DataFrame, kClusters: Int, kIter: Int = 30): PipelineModel ={
-    val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDay" ,"flagOrganic"))
-      .setOutputCol("featureVector")
-
-    val scaler = new StandardScaler()
-      .setInputCol("featureVector")
-      .setOutputCol("scaledFeatures")
-
-    val kMeans = new KMeans()
-      .setSeed(1L)
-      .setK(kClusters)
-      .setPredictionCol("cluster")
-      .setFeaturesCol("scaledFeatures")
-      .setMaxIter(kIter)
-
-    val pipeline = new Pipeline().setStages(Array(vectorAssembler, scaler, kMeans))
-
-    pipeline.fit(kmeansInput)
-  }
-
-  def showClusterCostForElbowMethod(inputKMeansDf: DataFrame, fromK: Int, toK: Int): Unit = {
-    val kMeansCosts = for {
-      kCluster <- (fromK to toK).toList
-      pipelineModel = getModelForKMeans(inputKMeansDf, kCluster)
-      kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
-      kMeansCost = kmModel.summary.trainingCost
-    } yield KMeansCost(kCluster, kMeansCost)
-
-    val xCluster = kMeansCosts.map(_.kCluster)
-    val yCostTraining = kMeansCosts.map(_.costTraining)
-
-    val plot = Seq(
-      Scatter(xCluster, yCostTraining).withName("CostTraining vs k")
-    )
-    val lay = Layout().withTitle("Elbow method")
-    plot.plot(s"plots/elbowFrom${fromK}To${toK}", lay)
-  }
-
-  def showAndSaveKMeansResults(inputKMeansDf: DataFrame, kCluster: Int, partitionSource: String): Unit  = {
-    val pipelineModel = getModelForKMeans(inputKMeansDf, kCluster)
-    val kmModel = pipelineModel.stages.last.asInstanceOf[KMeansModel]
-
-    val kmResult = pipelineModel
-      .transform(inputKMeansDf)
-      .cache()
-
-    // Save model result
-    pipelineModel
-      .write
-      .overwrite()
-      .save("data-models/output/cluster-model")
-
-    // Save enriched data with cluster
-    kmResult.write.mode("overwrite").partitionBy(partitionSource, "partOfDay").parquet("data-models/output/cluster-data")
-
-    // Show results
-    displayClusterMetrics(kmResult, kCluster)
-    printClusterCenters(kmModel)
-
-  }
-
-  def transformPartOfDay(partOfDay: Column): Column = {
-    when(partOfDay==="morning", lit(0))
-      .when(partOfDay==="afternoon", lit(1))
-      .when(partOfDay==="evening", lit(2))
-      .when(partOfDay==="night", lit(3))
+      .where(filterByPartition(col(partitionSource)))
   }
 
   def main(args: Array[String]): Unit = {
@@ -128,39 +54,21 @@ object VHSDataAnalyzer extends Logging {
 
         log.info("read vhs enriched data")
 
-        val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
-
-        val (partitionSource, fileNameSource, enrichedDataSchema, filterByPartition) = behavior match {
-          case Daily => ("date", "hd_playerbehavior", EnrichedDataPerDay.generateSchema, createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate))
-          case _ => ("codMonth", "hm_playerbehavior", EnrichedDataPerMonth.generateSchema, createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate))
-        }
-
-        val enrichedDataDf = localFileReader
-          .read(
-            localFileReaderConfig.folderName,
-            fileNameSource,
-            enrichedDataSchema
-          )
-        val inputKMeansDf = enrichedDataDf
-          .select(
-            col("userId"),
-            col("gameId"),
-            col("numLevelsCompleted"),
-            col("numAddsWatched"),
-            col("numPurchasesDone"),
-            transformPartOfDay(col("partOfDay")) as "partOfDay",
-            col("flagOrganic"),
-            col(partitionSource)
-          )
-          .where(filterByPartition(col(partitionSource)))
-          .cache()
-
         methodAnalyzer match {
           case ElbowAnalyzer(fromK, toK) =>
-            showClusterCostForElbowMethod(inputKMeansDf, fromK, toK)
+            log.info("read vhs enriched data")
+            val enrichedData = readEnrichedData(spark, localFileReaderConfig, behavior, dateRange).cache()
+
+            ElbowMethod.showClusterCostForElbowMethod(enrichedData, fromK, toK)
           case KMeansAnalyzer(k) =>
+            log.info("read vhs enriched data")
+            val enrichedData = readEnrichedData(spark, localFileReaderConfig, behavior, dateRange).cache()
+
             log.info("segmentation of vhs data")
-            showAndSaveKMeansResults(inputKMeansDf, k, partitionSource)
+            KMeansMethod.showAndSaveKMeansResults(enrichedData, k, getPartitionSourceFromBehavior(behavior))
+          case LTVAnalyzer(k) =>
+            val enrichedData = readEnrichedData(spark, localFileReaderConfig, behavior, dateRange)
+            LTVMethod.calculateAndSaveLTV(enrichedData, k)
         }
 
         spark.stop()

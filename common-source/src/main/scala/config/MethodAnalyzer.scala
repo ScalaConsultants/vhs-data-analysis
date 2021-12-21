@@ -16,6 +16,12 @@ object KMeansAnalyzer {
   def methodLabel:String = "k-means"
 }
 
+final case class LTVAnalyzer(k: Int) extends MethodAnalyzer
+
+object LTVAnalyzer {
+  def methodLabel:String = "ltv"
+}
+
 object MethodAnalyzer {
 
   val kClusters: Regex = "([0-9]+)".r
@@ -35,10 +41,17 @@ object MethodAnalyzer {
       case _ => Left("invalid inputs for KMeans method")
     }
 
+  private def getLTVMethodFromOpts(mapOpts: Map[String, String]): Either[String, LTVAnalyzer] =
+    mapOpts.get("k") match {
+      case Some(kClusters(k)) =>  Right(LTVAnalyzer(Integer.parseInt(k)))
+      case _ => Left("invalid inputs for KMeans method")
+    }
+
   def getAnalyzerMethodFromOpts(mapOpts: Map[String, String]): Either[String, MethodAnalyzer] = {
     mapOpts.get("method")  match {
       case Some(method) if method.equalsIgnoreCase(ElbowAnalyzer.methodLabel) =>  getElbowMethodFromOpts(mapOpts)
       case Some(method) if method.equalsIgnoreCase(KMeansAnalyzer.methodLabel) =>  getKMeansMethodFromOpts(mapOpts)
+      case Some(method) if method.equalsIgnoreCase(LTVAnalyzer.methodLabel) => getLTVMethodFromOpts(mapOpts)
       case _ => Left("invalid method analyzer")
     }
   }
