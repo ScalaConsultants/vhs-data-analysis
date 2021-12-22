@@ -89,13 +89,13 @@ object Main {
     val lay = Layout().withTitle("Number levels users completed in each cluster partitioned by part of day over 4 months")
     bars.plot("plots/levels.html", lay)*/
 
-    /*val bars = Queries.numberOfAdsWatchedByCluster(df)
+    val bars1 = Queries.numberOfAdsWatchedByCluster(df)
       .groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
 
-    val lay = Layout().withTitle("Number of ads users watched in each cluster partitioned by part of day over 4 months")
-    bars.plot("plots/ads.html", lay)*/
+    val lay1 = Layout().withTitle("Number of ads users watched in each cluster partitioned by part of day over 4 months")
+    bars1.plot("plots/ads.html", lay1)
 
     val bars = Queries.organicAdsByCluster(df)
       .groupBy(_._2).map { case (c, list) =>

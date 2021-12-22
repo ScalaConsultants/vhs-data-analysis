@@ -57,7 +57,7 @@ object Queries {
 
       val cluster = r.getInt(i0).toString
 
-      val partOfDay = getPartOfDay(r.getInt(i1))
+      val partOfDay = r.getString(i1)
       val count = r.getLong(i2)
 
       Tuple3(cluster, partOfDay, count)
