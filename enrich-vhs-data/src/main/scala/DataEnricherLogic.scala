@@ -27,8 +27,7 @@ object DataEnricherLogic extends Logging {
       col("levelDifficulty"),
       col("levelProgress"),
       trim(col("status")) as "status",
-      getDefaultTimezoneIfNull(col("timezone")) as "timezone",
-      generatePartOfDayFromDateTime(col("datetime"), col("timezone")) as "partOfDay",
+      generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
       col("date")
     )
   }
@@ -41,8 +40,7 @@ object DataEnricherLogic extends Logging {
       col("placementId"),
       trim(col("adType")) as "adType",
       trim(col("status")) as "status",
-      getDefaultTimezoneIfNull(col("timezone")) as "timezone",
-      generatePartOfDayFromDateTime(col("datetime"), col("timezone")) as "partOfDay",
+      generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
       col("date")
     )
   }
@@ -57,8 +55,7 @@ object DataEnricherLogic extends Logging {
       col("amount"),
       trim(col("currency")) as "currency",
       trim(col("status")) as "status",
-      getDefaultTimezoneIfNull(col("timezone")) as "timezone",
-      generatePartOfDayFromDateTime(col("datetime"), col("timezone")) as "partOfDay",
+      generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
       col("date")
     )
   }
