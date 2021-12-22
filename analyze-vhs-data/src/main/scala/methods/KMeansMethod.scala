@@ -9,7 +9,7 @@ import org.apache.spark.sql.functions.{col, countDistinct}
 object KMeansMethod {
 
   def showMetrics(enrichedDf: DataFrame): Unit = {
-    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDay", "flagOrganic")
+    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDayNumber", "flagOrganic")
     metricsDf
       .summary("count", "min", "mean", "max")
       .show()
@@ -44,7 +44,7 @@ object KMeansMethod {
 
   def getModelForKMeans(kmeansInput: DataFrame, kClusters: Int, kIter: Int = 30): PipelineModel ={
     val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDay" ,"flagOrganic"))
+      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDayNumber" ,"flagOrganic"))
       .setOutputCol("featureVector")
 
     val scaler = new StandardScaler()
@@ -78,7 +78,11 @@ object KMeansMethod {
       .save("data-models/output/cluster-model")
 
     // Save enriched data with cluster
-    kmResult.write.mode("overwrite").partitionBy(partitionSource, "partOfDay").parquet("data-models/output/cluster-data")
+    kmResult
+      .write
+      .mode("overwrite")
+      .partitionBy(partitionSource, "partOfDay")
+      .parquet("data-models/output/cluster-data")
 
     // Show results
     displayClusterMetrics(kmResult, kCluster)

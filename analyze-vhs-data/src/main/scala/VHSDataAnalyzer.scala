@@ -37,7 +37,8 @@ object VHSDataAnalyzer extends Logging {
         col("numLevelsCompleted"),
         col("numAddsWatched"),
         col("numPurchasesDone"),
-        transformPartOfDayToNumber(col("partOfDay")) as "partOfDay",
+        col("partOfDay"),
+        transformPartOfDayToNumber(col("partOfDay")) as "partOfDayNumber",
         col("flagOrganic"),
         col(partitionSource)
       )
@@ -67,8 +68,7 @@ object VHSDataAnalyzer extends Logging {
             log.info("segmentation of vhs data")
             KMeansMethod.showAndSaveKMeansResults(enrichedData, k, getPartitionSourceFromBehavior(behavior))
           case LTVAnalyzer(k) =>
-            val enrichedData = readEnrichedData(spark, localFileReaderConfig, behavior, dateRange)
-            LTVMethod.calculateAndSaveLTV(enrichedData, k)
+            LTVMethod.calculateAndSaveLTV(spark, k)
         }
 
         spark.stop()

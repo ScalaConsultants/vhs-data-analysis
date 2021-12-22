@@ -7,7 +7,8 @@ final case class PlayerEvent(userId: String,
                              gameId: String,
                              attribution: String,
                              action: String,
-                             timestamp: Long
+                             timestamp: Long,
+                             timezone: String
                             )
 
 object PlayerEvent extends SchemaGenerator {

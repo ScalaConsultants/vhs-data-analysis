@@ -1,6 +1,6 @@
 package utils
 
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{coalesce, col, lit}
 import org.apache.spark.sql.{Column, DataFrame}
 
 object DataEnricherUtil {
@@ -30,6 +30,8 @@ object DataEnricherUtil {
   def getDailyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_DAILY_RESULT"
 
   def getMonthlyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_MONTHLY_RESULT"
+
+  def getDefaultTimezoneIfNull(timezone: Column): Column = coalesce(timezone, lit(DEFAULT_UTC_TIMEZONE))
 
   def saveEnrichedData(enrichedData: DataFrame, partitions: Seq[String], path: String): Unit =
     enrichedData

@@ -17,4 +17,6 @@ object DataEnricherConstants {
 
   val FILENAME_DAILY_RESULT = "hd_playerbehavior"
   val FILENAME_MONTHLY_RESULT = "hm_playerbehavior"
+
+  val DEFAULT_UTC_TIMEZONE = "+00:00"
 }

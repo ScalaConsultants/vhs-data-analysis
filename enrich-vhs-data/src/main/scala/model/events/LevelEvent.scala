@@ -9,7 +9,8 @@ final case class LevelEvent(userId: String,
                             levelDifficulty: String,
                             levelProgress: String,
                             status: String,
-                            timestamp: Long
+                            timestamp: Long,
+                            timezone: String
                            )
 
 object LevelEvent extends SchemaGenerator {

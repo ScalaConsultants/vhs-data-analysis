@@ -8,7 +8,8 @@ final case class AddEvent(userId: String,
                           placementId: String,
                           adType: String,
                           status: String,
-                          timestamp: Long
+                          timestamp: Long,
+                          timezone: String
                          )
 
 object AddEvent extends SchemaGenerator {
