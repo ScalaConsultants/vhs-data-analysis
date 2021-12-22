@@ -14,7 +14,8 @@ lazy val plotlyVersion = "0.8.1"
 lazy val commonAppDependencies = Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
   "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
-  "org.mongodb.spark" %% "mongo-spark-connector" % sparkMongoConnectorVersion
+  "org.mongodb.spark" %% "mongo-spark-connector" % sparkMongoConnectorVersion,
+  "org.plotly-scala" %% "plotly-render" % plotlyVersion
 )
 
 lazy val enrichVHSDataDependencies = Seq(
