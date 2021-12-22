@@ -105,6 +105,7 @@ object Main {
     val lay = Layout().withTitle("Organic ad views by cluster over 4 months")
     bars.plot("plots/organicAds.html", lay)
 
+
     session.close()
   }
 
