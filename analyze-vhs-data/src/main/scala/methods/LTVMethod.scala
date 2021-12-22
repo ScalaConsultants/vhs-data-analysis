@@ -1,6 +1,6 @@
 package methods
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import plotly._
 import plotly.layout._
@@ -21,12 +21,8 @@ object LTVMethod {
     plot.plot(s"plots/ltv.html", lay)
   }
 
-  def calculateAndSaveLTV(inputKMeansDf: DataFrame, kCluster: Int): Unit = {
-    val pipelineModel = KMeansMethod.getModelForKMeans(inputKMeansDf, kCluster)
-
-    val kmResult = pipelineModel
-      .transform(inputKMeansDf)
-      .cache()
+  def calculateAndSaveLTV(sparkSession: SparkSession, kCluster: Int): Unit = {
+    val kmResult = sparkSession.read.parquet("data-models/output/cluster-data")
 
     val ltv = kmResult
       .groupBy("cluster")
