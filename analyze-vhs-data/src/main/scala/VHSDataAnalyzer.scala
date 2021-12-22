@@ -68,8 +68,7 @@ object VHSDataAnalyzer extends Logging {
             log.info("segmentation of vhs data")
             KMeansMethod.showAndSaveKMeansResults(enrichedData, k, getPartitionSourceFromBehavior(behavior))
           case LTVAnalyzer(k) =>
-            val enrichedData = readEnrichedData(spark, localFileReaderConfig, behavior, dateRange)
-            LTVMethod.calculateAndSaveLTV(enrichedData, k)
+            LTVMethod.calculateAndSaveLTV(spark, k)
         }
 
         spark.stop()
