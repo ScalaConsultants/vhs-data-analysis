@@ -2,11 +2,13 @@ import plotly._
 import element._
 import layout._
 import Plotly._
-import org.apache.spark.sql.{Column, SparkSession}
-import org.apache.spark.sql.functions.{lit, when}
+import org.apache.spark.sql.catalyst.dsl.expressions
+import org.apache.spark.sql.catalyst.dsl.expressions.DslExpression
+import org.apache.spark.sql.{Column, SparkSession, functions}
+import org.apache.spark.sql.functions.{col, column, count, countDistinct, lit, when}
+import plotly.element.ScatterMode.Markers
 
 object Main {
-
 
   def getPartOfDay(partOfDay: Int): String = {
     partOfDay match {
@@ -19,31 +21,10 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
-    val sparkSession = SparkSession.builder().getOrCreate()
-    import sparkSession.implicits._
+    implicit val session = SparkSession.builder().getOrCreate()
+    import session.implicits._
 
-    val df = sparkSession.read.parquet("data-models/output/cluster-data") //spark.read.parquet("/tmp/test/df/1.parquet/")
-
-    //df.collect()....
-
-    println()
-    println()
-
-    val data = df.collect().map { r =>
-      val i0 = r.fieldIndex("cluster")
-      val i1 = r.fieldIndex("partOfDay")
-      r.getInt(i0) -> getPartOfDay(r.getInt(i1))
-    }.toSeq.groupBy(_._1).map { case (c, list) =>
-      c -> list.groupBy(_._2).map{case (p, l) => p -> l.length}
-    }
-
-    /*val data2 = df.collect().map { r =>
-      val i0 = r.fieldIndex("cluster")
-      val i1 = r.fieldIndex("partOfDay")
-      r.get(i0).asInstanceOf[Int].toString -> getPartOfDay(r.get(i1).asInstanceOf[Int])
-    }.toSeq.groupBy(_._2).map { case (pod, list) =>
-      pod -> list.groupBy(_._1).map{case (p, l) => p -> l.length}
-    }*/
+    val df = session.read.parquet("data-models/output/cluster-data")
 
     /*println(data)
 
@@ -52,21 +33,79 @@ object Main {
 
     df.show(10)
 
-    val histograms = data.map { case (c, map) =>
-      val list = map.toSeq
+    /*val n = df.groupBy("cluster", "partOfDay").agg(
+      functions.count(col("userId")) as "numRecords"
+    ).show(50)
 
-      Histogram()
-        .withName(c.toString)
-        .withX(list.map(_._1))
-        .withY(list.map(_._2))
-        .withHistfunc(HistFunc.Sum)
-        .withHistnorm(HistNorm.Count)
+    println(s"\n\nn: ${n}\n\n")*/
+
+    /*val data = df.collect().map { r =>
+      val i0 = r.fieldIndex("cluster")
+      val i1 = r.fieldIndex("partOfDay")
+      r.getInt(i0).toString -> getPartOfDay(r.getInt(i1))
+    }.toSeq.groupBy(_._2).map{ case (pod, list) =>
+      pod -> list.groupBy(_._1).map{case (k, v) => k -> v.length}
+    }*/
+
+   /* val data = df.groupBy("cluster", "partOfDay").agg(countDistinct("userId" ) as "count")
+    data.show()
+
+    val bars = data.collect().map { r =>
+      val i0 = r.fieldIndex("cluster")
+      val i1 = r.fieldIndex("partOfDay")
+      val i2 = r.fieldIndex("count")
+
+      val cluster = r.getInt(i0).toString
+
+      val partOfDay = getPartOfDay(r.getInt(i1))
+      val count = r.getLong(i2)
+
+      Tuple3(cluster, partOfDay, count)
+    }.groupBy(_._2).map { case (c, list) =>
+      Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
 
-    val lay = Layout().withTitle("Part of Day Playings")
-    histograms.plot("plots/plot", lay)
+    val lay = Layout().withTitle("Number playings by user in each cluster partitioned by part of day over 4 months")
+    bars.plot("plots/playings.html", lay)*/
 
-    sparkSession.close()
+    /*val data = df.groupBy("cluster", "partOfDay").sum("numLevelsCompleted")
+    data.show()
+
+    val bars = data.collect().map { r =>
+      val i0 = r.fieldIndex("cluster")
+      val i1 = r.fieldIndex("partOfDay")
+      val i2 = r.fieldIndex("sum(numLevelsCompleted)")
+
+      val cluster = r.getInt(i0).toString
+
+      val partOfDay = getPartOfDay(r.getInt(i1))
+      val count = r.getLong(i2)
+
+      Tuple3(cluster, partOfDay, count)
+    }.groupBy(_._2).map { case (c, list) =>
+      Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
+    }.toSeq
+
+    val lay = Layout().withTitle("Number levels users completed in each cluster partitioned by part of day over 4 months")
+    bars.plot("plots/levels.html", lay)*/
+
+    /*val bars = Queries.numberOfAdsWatchedByCluster(df)
+      .groupBy(_._2).map { case (c, list) =>
+      Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
+    }.toSeq
+
+    val lay = Layout().withTitle("Number of ads users watched in each cluster partitioned by part of day over 4 months")
+    bars.plot("plots/ads.html", lay)*/
+
+    val bars = Queries.organicAdsByCluster(df)
+      .groupBy(_._2).map { case (c, list) =>
+      Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
+    }.toSeq
+
+    val lay = Layout().withTitle("Organic ad views by cluster over 4 months")
+    bars.plot("plots/organicAds.html", lay)
+
+    session.close()
   }
 
 }
