@@ -32,8 +32,7 @@ object Main {
       openInBrowser = false,
       addSuffixIfExists = true)
 
-<<<<<<< HEAD
-    val adsLay = Layout(barmode = BarMode.Group).withTitle("Number of watched ads by cluster")
+    val adsLay = Layout().withBarmode(BarMode.Group).withTitle("Number of watched ads by cluster")
     val adsBars = Queries.numberOfAdsWatchedByCluster(df).groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
@@ -41,17 +40,8 @@ object Main {
     adsBars.plot("plots/adsByCluster.html", adsLay, useCdn = true,
       openInBrowser = false,
       addSuffixIfExists = true)
-=======
-    val bars1 = Queries.numberOfAdsWatchedByCluster(df)
-      .groupBy(_._2).map { case (c, list) =>
-      Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
-    }.toSeq
 
-    val lay1 = Layout().withTitle("Number of ads users watched in each cluster partitioned by part of day over 4 months")
-    bars1.plot("plots/ads.html", lay1)
->>>>>>> f03bbfc9a6f1e4fab81a32aae129f895f7157cfe
-
-    val organicLay =  Layout(barmode = BarMode.Group).withTitle("Organic ads by cluster")
+    val organicLay =  Layout().withBarmode(BarMode.Group).withTitle("Organic ads by cluster")
     val organicBars = Queries.organicAdsByCluster(df).groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
