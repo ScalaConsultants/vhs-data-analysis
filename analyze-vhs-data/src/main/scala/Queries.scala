@@ -10,8 +10,11 @@ object Queries {
     }
   }
 
-  def playingsByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
-    df.groupBy("cluster", "partOfDay").agg(countDistinct("userId" ) as "count").collect().map { r =>
+  def playersByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
+    df.where(col("numLevelsCompleted")>0)
+      .groupBy("cluster", "partOfDay")
+      .agg(countDistinct("userId" ) as "count")
+      .collect().map { r =>
       val i0 = r.fieldIndex("cluster")
       val i1 = r.fieldIndex("partOfDay")
       val i2 = r.fieldIndex("count")
