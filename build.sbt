@@ -15,7 +15,9 @@ lazy val commonAppDependencies = Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % "provided",
   "org.apache.spark" %% "spark-sql" % sparkVersion % "provided",
   "org.mongodb.spark" %% "mongo-spark-connector" % sparkMongoConnectorVersion,
-  "org.plotly-scala" %% "plotly-render" % plotlyVersion
+  "org.plotly-scala" %% "plotly-render" % plotlyVersion,
+
+  "org.apache.spark.mllib" %% "dbscan-spark" % "0.1.0"
 )
 
 lazy val enrichVHSDataDependencies = Seq(
@@ -59,6 +61,6 @@ lazy val analyzeVHSData = (project in file("analyze-vhs-data"))
       case _ => MergeStrategy.first
     },
     assembly / assemblyJarName := "analyze-vhs-data.jar",
-    assembly / mainClass := Some("Main")
+    assembly / mainClass := Some("DBSCANClustering")
   )
   .dependsOn(commonSource)

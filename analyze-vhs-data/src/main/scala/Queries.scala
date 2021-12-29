@@ -28,16 +28,16 @@ object Queries {
     }.toSeq
   }
 
-  def levelsCompletedByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
-    df.groupBy("cluster", "partOfDay").sum("numLevelsCompleted").collect().map { r =>
+  def levelsCompletedByCluster(df: DataFrame): Seq[Tuple3[String, String, Double]] = {
+    df.groupBy("cluster", "partOfDay").avg("numLevelsCompleted").collect().map { r =>
       val i0 = r.fieldIndex("cluster")
       val i1 = r.fieldIndex("partOfDay")
-      val i2 = r.fieldIndex("sum(numLevelsCompleted)")
+      val i2 = r.fieldIndex("avg(numLevelsCompleted)")
 
       val cluster = r.getInt(i0).toString
 
       val partOfDay = r.getString(i1)
-      val count = r.getLong(i2)
+      val count = r.getDouble(i2)
 
       Tuple3(cluster, partOfDay, count)
     }
