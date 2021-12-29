@@ -16,11 +16,29 @@ object KMeansAnalyzer {
   def methodLabel:String = "k-means"
 }
 
-final case class LTVAnalyzer(k: Int) extends MethodAnalyzer
+final case class LTVAnalyzer(attribute: LTVAttribute) extends MethodAnalyzer
 
 object LTVAnalyzer {
   def methodLabel:String = "ltv"
 }
+
+
+sealed trait LTVAttribute
+
+object LTVAttribute {
+
+  case object Cluster extends LTVAttribute
+  case object User extends LTVAttribute
+
+  def fromString(str: String): Option[LTVAttribute] =
+    str.toLowerCase match {
+      case "cluster" => Some(Cluster)
+      case "user" => Some(User)
+      case _ => None
+    }
+
+}
+
 
 object MethodAnalyzer {
 
@@ -42,10 +60,11 @@ object MethodAnalyzer {
     }
 
   private def getLTVMethodFromOpts(mapOpts: Map[String, String]): Either[String, LTVAnalyzer] =
-    mapOpts.get("k") match {
-      case Some(kClusters(k)) =>  Right(LTVAnalyzer(Integer.parseInt(k)))
-      case _ => Left("invalid inputs for KMeans method")
+    mapOpts.get("attribute").flatMap(LTVAttribute.fromString) match {
+      case Some(attribute) =>  Right(LTVAnalyzer(attribute))
+      case _ => Left("invalid inputs for LTV method")
     }
+
 
   def getAnalyzerMethodFromOpts(mapOpts: Map[String, String]): Either[String, MethodAnalyzer] = {
     mapOpts.get("method")  match {

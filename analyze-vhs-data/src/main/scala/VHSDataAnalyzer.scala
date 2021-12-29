@@ -67,8 +67,11 @@ object VHSDataAnalyzer extends Logging {
 
             log.info("segmentation of vhs data")
             KMeansMethod.showAndSaveKMeansResults(enrichedData, k, getPartitionSourceFromBehavior(behavior))
-          case LTVAnalyzer(k) =>
-            LTVMethod.calculateAndSaveLTV(spark, k)
+          case LTVAnalyzer(attribute) =>
+            attribute match {
+              case LTVAttribute.Cluster => LTVMethod.calculateAndSaveLTVByCluster(spark)
+              case LTVAttribute.User    => LTVMethod.calculateAndSaveLTVByUser(spark)
+            }
         }
 
         spark.stop()
