@@ -50,11 +50,19 @@ object LTVMethod {
   def calculateAndSaveLTVByUser(sparkSession: SparkSession): Unit = {
     val kmResult = sparkSession.read.parquet("data-models/output/cluster-data")
 
+    val lifetimeDataFrame =
+      kmResult.agg(count_distinct(col("userId")) as "allUsers",
+        count_distinct(col("numLevelsCompleted").gt(0)) as "playingUsers")
+        .withColumn("lifetime",  col("playingUsers").divide("allUsers"))
+
+    val lifetime = lifetimeDataFrame.take(1)(0).getLong(0)
+    val uniqueUsers = kmResult.agg(count_distinct(col(("userId")))).take(1)(0).getLong(0)
+
     val ltv = kmResult
-      .groupBy(col("userId"))
-      .agg(count_distinct(col("userId")) as "uniqueUsers", sum("numAddsWatched").multiply(0.015) as "revenue")
-      .withColumn("ltv", col("revenue").divide(col("uniqueUsers")))
-      .select(col("ltv" ), col("userId"))
+      .groupBy("userId")
+      .agg(sum("numAddsWatched").multiply(0.015) as "revenue")
+      .withColumn("arpdau", col("revenue").divide(uniqueUsers))
+      .select(col("arpdau").multiply(lifetime), col("userId"))
 
     plotByUser(ltv.collect().map(a => LTVPerUser(a.getDouble(0), a.getString(1))).toList)
 
