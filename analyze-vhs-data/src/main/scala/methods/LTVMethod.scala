@@ -1,10 +1,12 @@
 package methods
 
+import config.{Behavior, Both, Daily, Monthly}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import plotly._
 import plotly.layout._
 import plotly.Plotly._
+import utils.DateColumnOperations.generateCodMonthFromDate
 
 object LTVMethod {
   case class LTVPerCluster(ltv: Double, k: Int)
@@ -47,25 +49,56 @@ object LTVMethod {
     ltv.show()
   }
 
-  def calculateAndSaveLTVByUser(sparkSession: SparkSession): Unit = {
-    val kmResult = sparkSession.read.parquet("data-models/output/cluster-data")
+  def calculateAndSaveLTVByUserDaily(dataInput: DataFrame): Unit = {
 
-    val lifetimeDataFrame =
-      kmResult.agg(count_distinct(col("userId")) as "allUsers",
-        count_distinct(col("numLevelsCompleted").gt(0)) as "playingUsers")
-        .withColumn("lifetime",  col("playingUsers").divide("allUsers"))
+    val dateInputWithCodeDate = dataInput.withColumn("codeDate", col("date"))
 
-    val lifetime = lifetimeDataFrame.take(1)(0).getLong(0)
-    val uniqueUsers = kmResult.agg(count_distinct(col(("userId")))).take(1)(0).getLong(0)
+    // BlueTip
+    // AvantStay
+    // Cats-effect
+    // final-tagless
 
-    val ltv = kmResult
-      .groupBy("userId")
-      .agg(sum("numAddsWatched").multiply(0.015) as "revenue")
-      .withColumn("arpdau", col("revenue").divide(uniqueUsers))
-      .select(col("arpdau").multiply(lifetime), col("userId"))
+    //  This snippet is broken
+    val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("userId", "codeDate").agg(
+       lit(4).minus(count(col("partOfDay"))) as "lifetime",
+      sum("numAddsWatched").multiply(0.015) as "revenue"
+    )
 
-    plotByUser(ltv.collect().map(a => LTVPerUser(a.getDouble(0), a.getString(1))).toList)
+    val dauPerDayDf =  dateInputWithCodeDate.groupBy("codeDate").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
 
-    ltv.show()
+    val ltvDf = lifetimeWithRevenuePerUserDf
+      .join(dauPerDayDf, Seq("codeDate"), "left_outer")
+      .withColumn("arpdau", col("revenue").divide(col("activeUsersPerPeriod")))
+      .select(
+        col("userId"),
+        col("arpdau").multiply(col("lifetime")) as "ltv"
+      )
+
+    plotByUser(ltvDf.collect().map(a => LTVPerUser(a.getDouble(1), a.getString(0))).toList)
+
+    ltvDf.show()
+  }
+
+  def calculateAndSaveLTVByUserMonthly(dataInput: DataFrame): Unit = {
+
+    val dateInputWithCodeDate = dataInput.withColumn("codeMonth", generateCodMonthFromDate(col("date")))
+
+   val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("userId", "codeMonth").agg(
+        count_distinct(col("date")) as "lifetime", // use days instead of part of the day
+        sum("numAddsWatched").multiply(0.015) as "revenue"
+   )
+    val dauPerMonthDf =  dateInputWithCodeDate.groupBy("codeMonth").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
+
+    val ltvDf = lifetimeWithRevenuePerUserDf
+      .join(dauPerMonthDf, Seq("codeMonth"), "left_outer")
+      .withColumn("arpdau", col("revenue").divide(col("activeUsersPerPeriod")))
+      .select(
+        col("userId"),
+        col("arpdau").multiply(col("lifetime")) as "ltv"
+      )
+
+    plotByUser(ltvDf.collect().map(a => LTVPerUser(a.getDouble(1), a.getString(0))).toList)
+
+    ltvDf.show()
   }
 }

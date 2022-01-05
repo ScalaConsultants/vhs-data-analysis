@@ -70,7 +70,13 @@ object VHSDataAnalyzer extends Logging {
           case LTVAnalyzer(attribute) =>
             attribute match {
               case LTVAttribute.Cluster => LTVMethod.calculateAndSaveLTVByCluster(spark)
-              case LTVAttribute.User    => LTVMethod.calculateAndSaveLTVByUser(spark)
+              case LTVAttribute.User    =>
+                val enrichedData = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
+                behavior match {
+                  case Daily   => LTVMethod.calculateAndSaveLTVByUserDaily(enrichedData)
+                  case Monthly => LTVMethod.calculateAndSaveLTVByUserMonthly(enrichedData)
+                  case _       =>          log.warn(s"LTV behaviour not supported ")
+                }
             }
         }
 
