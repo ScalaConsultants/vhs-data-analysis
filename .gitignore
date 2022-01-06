@@ -39,3 +39,5 @@ plots/
 
 # User-specific stuff:
 .idea/workspace.xml
+
+.DB_Store
