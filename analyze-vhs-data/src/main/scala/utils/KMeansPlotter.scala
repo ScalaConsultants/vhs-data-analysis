@@ -1,18 +1,17 @@
-import org.apache.spark.sql.SparkSession
+package utils
+
+import org.apache.spark.sql.DataFrame
 import plotly.Plotly._
 import plotly._
 import plotly.element.{Color, Marker}
 import plotly.layout._
 
-object KMeansPlots {
 
-  def main(args: Array[String]): Unit = {
+object KMeansPlotter {
 
-    implicit val session = SparkSession.builder().getOrCreate()
+  def generatePlots(kmeansResultDf: DataFrame): Unit = {
 
-    val df = session.read.parquet("data-models/output/cluster-data")
-
-    val playingsBar = Queries.playersByCluster(df)
+    val playingsBar = KmeansResultQueries.playersByCluster(kmeansResultDf)
       .groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
@@ -24,7 +23,7 @@ object KMeansPlots {
       openInBrowser = false,
       addSuffixIfExists = true)
 
-    val levelsBar = Queries.levelsCompletedByCluster(df).groupBy(_._2).map { case (c, list) =>
+    val levelsBar = KmeansResultQueries.levelsCompletedByCluster(kmeansResultDf).groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
 
@@ -35,7 +34,7 @@ object KMeansPlots {
       openInBrowser = false,
       addSuffixIfExists = true)
 
-    val adsBars = Queries.numberOfAdsWatchedByCluster(df).groupBy(_._2).map { case (c, list) =>
+    val adsBars = KmeansResultQueries.numberOfAdsWatchedByCluster(kmeansResultDf).groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
 
@@ -44,15 +43,13 @@ object KMeansPlots {
       openInBrowser = false,
       addSuffixIfExists = true)
 
-    val organicBars = Queries.organicAdsByCluster(df).groupBy(_._2).map { case (c, list) =>
+    val organicBars = KmeansResultQueries.organicAdsByCluster(kmeansResultDf).groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
-    val organicLay =  Layout().withBarmode(BarMode.Group).withTitle("Organic users by cluster")
+    val organicLay = Layout().withBarmode(BarMode.Group).withTitle("Organic users by cluster")
     organicBars.plot("plots/kmeans/organicUsersByCluster.html", organicLay, useCdn = true,
       openInBrowser = false,
       addSuffixIfExists = true)
-
-    session.close()
 
   }
 

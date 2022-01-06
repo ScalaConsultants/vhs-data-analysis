@@ -1,7 +1,9 @@
-import org.apache.spark.sql._
-import org.apache.spark.sql.functions._
+package utils
 
-object Queries {
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions.{col, countDistinct}
+
+object KmeansResultQueries {
 
   def getOrganic(flag: Int): String = {
     flag match {
@@ -11,9 +13,9 @@ object Queries {
   }
 
   def playersByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
-    df.where(col("numLevelsCompleted")>0)
+    df.where(col("numLevelsCompleted") > 0)
       .groupBy("cluster", "partOfDay")
-      .agg(countDistinct("userId" ) as "count")
+      .agg(countDistinct("userId") as "count")
       .collect().map { r =>
       val i0 = r.fieldIndex("cluster")
       val i1 = r.fieldIndex("partOfDay")
