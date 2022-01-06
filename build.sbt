@@ -58,6 +58,6 @@ lazy val analyzeVHSData = (project in file("analyze-vhs-data"))
       case _ => MergeStrategy.first
     },
     assembly / assemblyJarName := "analyze-vhs-data.jar",
-    assembly / mainClass := Some("VHSDataAnalyzer")
+    assembly / mainClass := Some("KMeansPlots")
   )
   .dependsOn(commonSource)
