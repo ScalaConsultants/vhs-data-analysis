@@ -5,6 +5,7 @@ import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{col, countDistinct}
+import utils.KMeansPlotter
 
 object KMeansMethod {
 
@@ -76,6 +77,8 @@ object KMeansMethod {
       .write
       .overwrite()
       .save("data-models/output/cluster-model")
+
+    KMeansPlotter.generatePlots(kmResult)
 
     // Save enriched data with cluster
     kmResult
