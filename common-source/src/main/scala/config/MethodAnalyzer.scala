@@ -29,11 +29,13 @@ object LTVAttribute {
 
   case object Cluster extends LTVAttribute
   case object User extends LTVAttribute
+  case object Period extends LTVAttribute
 
   def fromString(str: String): Option[LTVAttribute] =
     str.toLowerCase match {
       case "cluster" => Some(Cluster)
       case "user" => Some(User)
+      case "period" => Some(Period)
       case _ => None
     }
 
