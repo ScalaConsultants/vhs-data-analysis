@@ -43,7 +43,7 @@ object KMeansPlotter {
       openInBrowser = false,
       addSuffixIfExists = true)
 
-    val organicBars = KmeansResultQueries.organicAdsByCluster(kmeansResultDf).groupBy(_._2).map { case (c, list) =>
+    val organicBars = KmeansResultQueries.organicUserByCluster(kmeansResultDf).groupBy(_._2).map { case (c, list) =>
       Bar(list.map(_._1).toSeq, list.map(_._3).toSeq).withName(c)
     }.toSeq
     val organicLay = Layout().withBarmode(BarMode.Group).withTitle("Organic users by cluster")

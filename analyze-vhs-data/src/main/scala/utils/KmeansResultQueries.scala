@@ -45,7 +45,7 @@ object KmeansResultQueries {
     }
   }
 
-  def numberOfAdsWatchedByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
+  def numberOfAdsWatchedByCluster(df: DataFrame): Seq[Tuple3[String, String, Double]] = {
     df.groupBy("cluster", "partOfDay").avg("numAddsWatched").collect().map { r =>
       val i0 = r.fieldIndex("cluster")
       val i1 = r.fieldIndex("partOfDay")
@@ -54,13 +54,13 @@ object KmeansResultQueries {
       val cluster = r.getInt(i0).toString
 
       val partOfDay = r.getString(i1)
-      val count = r.getLong(i2)
+      val count = r.getDouble(i2)
 
       Tuple3(cluster, partOfDay, count)
     }
   }
 
-  def organicAdsByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
+  def organicUserByCluster(df: DataFrame): Seq[Tuple3[String, String, Long]] = {
     df.groupBy("cluster", "flagOrganic").agg(countDistinct("userId")).collect().map { r =>
       val i0 = r.fieldIndex("cluster")
       val i1 = r.fieldIndex("flagOrganic")
