@@ -5,6 +5,7 @@ import reader.file.LocalFileReader
 import utils.DateColumnOperations._
 import utils.DataAnalyzerUtil._
 import config._
+import methods.LTVMethod.{calculateAndSaveLTVByDay, calculateAndSaveLTVByMonth}
 import methods._
 import model._
 
@@ -67,8 +68,24 @@ object VHSDataAnalyzer extends Logging {
 
             log.info("segmentation of vhs data")
             KMeansMethod.showAndSaveKMeansResults(enrichedData, k, getPartitionSourceFromBehavior(behavior))
-          case LTVAnalyzer(k) =>
-            LTVMethod.calculateAndSaveLTV(spark, k)
+          case LTVAnalyzer(attribute) =>
+            attribute match {
+              case LTVAttribute.Cluster => LTVMethod.calculateAndSaveLTVByCluster(spark)
+              case LTVAttribute.User =>
+                val enrichedData = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
+                behavior match {
+                  case Daily => LTVMethod.calculateAndSaveLTVByUserDaily(enrichedData)
+                  case Monthly => LTVMethod.calculateAndSaveLTVByUserMonthly(enrichedData)
+                  case _ => log.warn(s"LTV behaviour not supported ")
+                }
+              case LTVAttribute.Period =>
+                val enrichedData = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
+                behavior match {
+                  case Daily => LTVMethod.calculateAndSaveLTVByDay(enrichedData)
+                  case Monthly => LTVMethod.calculateAndSaveLTVByMonth(enrichedData)
+                  case _ => log.warn(s"LTV behaviour not supported ")
+                }
+            }
         }
 
         spark.stop()
