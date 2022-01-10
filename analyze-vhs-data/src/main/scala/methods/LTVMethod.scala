@@ -1,23 +1,20 @@
 package methods
 
-import config.{Behavior, Both, Daily, Monthly}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import plotly._
 import plotly.layout._
 import plotly.Plotly._
+import plotly.element.LocalDateTime
 import utils.DateColumnOperations.generateCodMonthFromDate
-
 import java.sql.Date
-import java.time.LocalDate
 
 object LTVMethod {
   case class LTVPerCluster(ltv: Double, k: Int)
-  case class LTVPerUser(ltv: Double, user: String)
   case class LTVPerDate(ltv: Double, date: Date)
-  case class LTVPerMonth(ltv: Double, date: String)
+  case class LTVPerMonth(ltv: Double, codMonth: String)
 
-  def plotLTV(points: List[LTVPerCluster]): Unit = {
+  def plotLTVByCluster(points: List[LTVPerCluster]): Unit = {
 
     val xCluster = points.map(_.k)
     val yLTV = points.map(_.ltv)
@@ -25,45 +22,39 @@ object LTVMethod {
     val plot = Seq(
       Bar(xCluster, yLTV).withName("Cluster vs LTV")
     )
-    val lay = Layout().withTitle("LTV method")
-    plot.plot(s"plots/ltv.html", lay)
+    val lay = Layout().withTitle("LTV method by Cluster")
+    plot.plot(s"plots/ltvByCluster.html", lay)
   }
 
-  def plotByUser(points: List[LTVPerUser]): Unit = {
+  def plotLTVByDate(points: List[LTVPerDate], aggOperation: String): Unit = {
 
-    val xCluster = points.zipWithIndex.map(_._2)
-    val yLTV = points.map(_.ltv)
+    val pointsWithDateParsed = points
+      .map(p => (LocalDateTime.parse(s"${p.date.toString} 00:00"), p.ltv))
+      .collect{
+        case (Some(date), ltv) => (date, ltv)
+      }
 
-    val plot = Seq(
-      Bar(xCluster, yLTV).withName("User vs LTV")
-    )
-    val lay = Layout().withTitle("LTV method")
-    plot.plot(s"plots/ltv.html", lay)
-  }
-
-  def plotByDate(points: List[LTVPerDate]): Unit = {
-
-    val xCluster = points.zipWithIndex.map(_._2)
-    val yLTV = points.map(_.ltv)
+    val xDate = pointsWithDateParsed.map(_._1)
+    val yLTV = pointsWithDateParsed.map(_._2)
 
     val plot = Seq(
-      Bar(xCluster, yLTV).withName("Month vs LTV")
+      Scatter(xDate, yLTV)
     )
-    val lay = Layout().withTitle("LTV method")
-    plot.plot(s"plots/ltv.html", lay)
+    val lay = Layout().withTitle(s"Date vs $aggOperation LTV")
+    plot.plot(s"plots/ltvByDate_$aggOperation.html", lay)
   }
 
 
-  def plotByMonth(points: List[LTVPerMonth]): Unit = {
+  def plotLTVByMonth(points: List[LTVPerMonth], aggOperation: String): Unit = {
 
-    val xCluster = points.zipWithIndex.map(_._2)
+    val xCodMonth = points.map(_.codMonth)
     val yLTV = points.map(_.ltv)
 
     val plot = Seq(
-      Bar(xCluster, yLTV).withName("Month vs LTV")
+      Scatter(xCodMonth, yLTV)
     )
-    val lay = Layout().withTitle("LTV method")
-    plot.plot(s"plots/ltv.html", lay)
+    val lay = Layout().withTitle(s"CodMonth vs $aggOperation LTV")
+    plot.plot(s"plots/ltvByMonth_$aggOperation.html", lay)
   }
 
   def calculateAndSaveLTVByCluster(sparkSession: SparkSession): Unit = {
@@ -75,92 +66,58 @@ object LTVMethod {
       .withColumn("ltv", col("revenue").divide(col("uniqueUsers")))
       .select(col("ltv"), col("cluster"))
 
-    plotLTV(ltv.collect().map(a => LTVPerCluster(a.getDouble(0), a.getInt(1))).toList)
+    plotLTVByCluster(ltv.collect().map(a => LTVPerCluster(a.getDouble(0), a.getInt(1))).toList)
 
     ltv.show()
   }
 
   def calculateAndSaveLTVByUserDaily(dataInput: DataFrame): Unit = {
-
-    val dateInputWithCodeDate = dataInput.withColumn("codeDate", col("date"))
-
-    val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("userId", "codeDate").agg(
-       lit(4).minus(count(col("partOfDay"))) as "lifetime",
-      sum("numAddsWatched").multiply(0.015) as "revenue"
-    )
-
-    val dauPerDayDf =  dateInputWithCodeDate.groupBy("codeDate").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
-
-    val ltvDf = lifetimeWithRevenuePerUserDf
-      .join(dauPerDayDf, Seq("codeDate"), "left_outer")
-      .withColumn("arpdau", col("revenue").divide(col("activeUsersPerPeriod")))
-      .select(
-        col("userId"),
-        col("arpdau").multiply(col("lifetime")) as "ltv"
-      )
-
-    plotByUser(ltvDf.collect().map(a => LTVPerUser(a.getDouble(1), a.getString(0))).toList)
-
-    ltvDf.show()
-  }
-
-
-  def calculateAndSaveLTVByMonth(dataInput: DataFrame): Unit = {
-    val dateInputWithCodeDate = dataInput.withColumn("codeMonth", generateCodMonthFromDate(col("date")))
-
-    val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("codeMonth").agg(
-      count(col("date")) as "lifetime",
-      sum("numAddsWatched").multiply(0.015) as "revenue"
-    )
-
-    val dauPerMonth =  dateInputWithCodeDate.groupBy("codeMonth").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
-
-    val ltvDf = lifetimeWithRevenuePerUserDf
-      .join(dauPerMonth, Seq("codeMonth"), "left_outer")
-      .withColumn("arpdau", col("revenue"))
-      .select(
-        col("codeMonth"),
-        col("arpdau").multiply(col("lifetime")) as "ltv"
-      ).orderBy(col("codeMonth"))
-
-    plotByMonth(ltvDf.collect().map(a => LTVPerMonth(a.getDouble(1), a.getString(0))).toList)
-
-    ltvDf.show()
-
-  }
-
-  def calculateAndSaveLTVByDay(dataInput: DataFrame): Unit = {
-    val dateInputWithCodeDate = dataInput.withColumn("codeDate", col("date"))
-
-    val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("codeDate").agg(
+    val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
       count(col("partOfDay")) as "lifetime",
       sum("numAddsWatched").multiply(0.015) as "revenue"
     )
 
-    val dauPerDayDf =  dateInputWithCodeDate.groupBy("codeDate").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
+    val dauPerDayDf =  dataInput.groupBy("date").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
 
     val ltvDf = lifetimeWithRevenuePerUserDf
-      .join(dauPerDayDf, Seq("codeDate"), "left_outer")
+      .join(dauPerDayDf, Seq("date"), "left_outer")
       .withColumn("arpdau", col("revenue").divide(col("activeUsersPerPeriod")))
       .select(
-        col("codeDate"),
-        col("arpdau").multiply(col("lifetime")) as "ltv"
-      ).orderBy(col("codeDate"))
+        col("userId"),
+        col("arpdau").multiply(col("lifetime")) as "ltv",
+        col("date")
+      )
 
-    plotByDate(ltvDf.collect().map(a => LTVPerDate(a.getDouble(1), a.getDate(0))).toList)
+    ltvDf
+      .write
+      .mode("overwrite")
+      .partitionBy("date")
+      .parquet("data-models/output/ltvDaily")
 
-    ltvDf.show()
+    val ltvByPeriodDf = ltvDf.groupBy("date").agg(
+      sum("ltv") as "sumLtv",
+      avg("ltv") as "avgLtv"
+    ).orderBy("date")
 
+    ltvByPeriodDf.show(50)
+    val ltvByPeriodList = ltvByPeriodDf.collect()
+
+    //Sum ltv
+    plotLTVByDate(ltvByPeriodList.map(a => LTVPerDate(a.getDouble(1), a.getDate(0))).toList, "Sum")
+
+    //Avg ltv
+    plotLTVByDate(ltvByPeriodList.map(a => LTVPerDate(a.getDouble(2), a.getDate(0))).toList, "Avg")
   }
+
 
   def calculateAndSaveLTVByUserMonthly(dataInput: DataFrame): Unit = {
 
     val dateInputWithCodeDate = dataInput.withColumn("codeMonth", generateCodMonthFromDate(col("date")))
 
-   val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("userId", "codeMonth").agg(
-        count_distinct(col("date")) as "lifetime",
-        sum("numAddsWatched").multiply(0.015) as "revenue"
-   )
+    val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("userId", "codeMonth").agg(
+      count_distinct(col("date")) as "lifetime",
+      sum("numAddsWatched").multiply(0.015) as "revenue"
+    )
     val dauPerMonthDf =  dateInputWithCodeDate.groupBy("codeMonth").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
 
     val ltvDf = lifetimeWithRevenuePerUserDf
@@ -168,11 +125,27 @@ object LTVMethod {
       .withColumn("arpdau", col("revenue").divide(col("activeUsersPerPeriod")))
       .select(
         col("userId"),
-        col("arpdau").multiply(col("lifetime")) as "ltv"
+        col("arpdau").multiply(col("lifetime")) as "ltv",
+        col("codMonth")
       )
 
-    plotByUser(ltvDf.collect().map(a => LTVPerUser(a.getDouble(1), a.getString(0))).toList)
+    ltvDf
+      .write
+      .mode("overwrite")
+      .partitionBy("codMonth")
+      .parquet("data-models/output/ltvMonthly")
 
-    ltvDf.show()
+    val ltvByPeriodDf = ltvDf.groupBy("codMonth").agg(
+      sum("ltv") as "sumLtv",
+      avg("ltv") as "avgLtv"
+    )
+
+    val ltvByPeriodList = ltvByPeriodDf.collect()
+
+    //Sum ltv
+    plotLTVByMonth(ltvByPeriodList.map(a => LTVPerMonth(a.getDouble(1), a.getString(0))).toList, "Sum")
+
+    //Avg ltv
+    plotLTVByMonth(ltvByPeriodList.map(a => LTVPerMonth(a.getDouble(2), a.getString(0))).toList, "Avg")
   }
 }
