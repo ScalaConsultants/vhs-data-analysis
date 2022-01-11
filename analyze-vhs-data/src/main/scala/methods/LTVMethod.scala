@@ -7,12 +7,14 @@ import plotly.layout._
 import plotly.Plotly._
 import plotly.element.LocalDateTime
 import utils.DateColumnOperations.generateCodMonthFromDate
-import java.sql.Date
 
 object LTVMethod {
   case class LTVPerCluster(ltv: Double, k: Int)
-  case class LTVPerDate(ltv: Double, date: Date)
+  case class LTVPerDate(ltv: Double, date: LocalDateTime)
   case class LTVPerMonth(ltv: Double, codMonth: String)
+
+  case class LTVPointsPerDate(sumLTVPoints: List[LTVPerDate], avgLTVPoints: List[LTVPerDate])
+  case class LTVPointsPerCluster(sumLTVPoints: List[LTVPerDate], avgLTVPoints: List[LTVPerDate], k: Int)
 
   def plotLTVByCluster(points: List[LTVPerCluster]): Unit = {
 
@@ -26,20 +28,18 @@ object LTVMethod {
     plot.plot(s"plots/ltvByCluster.html", lay)
   }
 
-  def plotLTVByDate(points: List[LTVPerDate], aggOperation: String): Unit = {
+  def plotLTVByDate(points: List[LTVPerDate], pointsByCluster: List[(List[LTVPerDate], Int)], aggOperation: String): Unit = {
+    val xDate = points.map(_.date)
+    val yLTV = points.map(_.ltv)
 
-    val pointsWithDateParsed = points
-      .map(p => (LocalDateTime.parse(s"${p.date.toString} 00:00"), p.ltv))
-      .collect{
-        case (Some(date), ltv) => (date, ltv)
-      }
+    val ScattersByClusters = pointsByCluster.map{ case (pointsCluster, k) =>
+      val xDateCluster = pointsCluster.map(_.date)
+      val yLTVCluster = pointsCluster.map(_.ltv)
+      Scatter(xDateCluster, yLTVCluster).withName(s"LTV cluster $k")
+    }
 
-    val xDate = pointsWithDateParsed.map(_._1)
-    val yLTV = pointsWithDateParsed.map(_._2)
+    val plot = Seq(Scatter(xDate, yLTV).withName("LTV general"))++ScattersByClusters
 
-    val plot = Seq(
-      Scatter(xDate, yLTV)
-    )
     val lay = Layout().withTitle(s"Date vs $aggOperation LTV")
     plot.plot(s"plots/ltvByDate_$aggOperation.html", lay)
   }
@@ -57,9 +57,7 @@ object LTVMethod {
     plot.plot(s"plots/ltvByMonth_$aggOperation.html", lay)
   }
 
-  def calculateAndSaveLTVByCluster(sparkSession: SparkSession): Unit = {
-    val kmResult = sparkSession.read.parquet("data-models/output/cluster-data")
-
+  def calculateAndSaveLTVByCluster(kmResult: DataFrame): Unit = {
     val ltv = kmResult
       .groupBy("cluster")
       .agg(count_distinct(col("userId")) as "uniqueUsers", sum("numAddsWatched").multiply(0.015) as "revenue")
@@ -71,7 +69,7 @@ object LTVMethod {
     ltv.show()
   }
 
-  def calculateAndSaveLTVByUserDaily(dataInput: DataFrame): Unit = {
+  def calculateLTVByUserDaily(dataInput: DataFrame): DataFrame = {
     val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
       count(col("partOfDay")) as "lifetime",
       sum("numAddsWatched").multiply(0.015) as "revenue"
@@ -87,26 +85,87 @@ object LTVMethod {
         col("arpdau").multiply(col("lifetime")) as "ltv",
         col("date")
       )
-
     ltvDf
-      .write
-      .mode("overwrite")
-      .partitionBy("date")
-      .parquet("data-models/output/ltvDaily")
+  }
 
+  def calculateLTVPointsByDate(ltvDf: DataFrame): DataFrame = {
     val ltvByPeriodDf = ltvDf.groupBy("date").agg(
       sum("ltv") as "sumLtv",
       avg("ltv") as "avgLtv"
     ).orderBy("date")
+    ltvByPeriodDf
+  }
 
-    ltvByPeriodDf.show(50)
-    val ltvByPeriodList = ltvByPeriodDf.collect()
+  def calculateAndSaveLTVByUserDaily(dataInput: DataFrame): Unit = {
+    val ltvDf = calculateLTVByUserDaily(dataInput)
+
+    val ltvByPeriodDf = calculateLTVPointsByDate(ltvDf)
+
+    ltvByPeriodDf.show(30)
+
+    val ltvSumAndAvgPoints = ltvByPeriodDf
+      .collect()
+      .map { a =>
+        (
+          LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
+          a.getDouble(1),
+          a.getDouble(2)
+        )
+      }
+      .collect{
+        case (Some(date), sumLTV, avgLTV) => (LTVPerDate(sumLTV, date), LTVPerDate(avgLTV, date))
+      }
+      .toList
+
+    val ltvSumAndAvgPointsTotal = LTVPointsPerDate(
+      ltvSumAndAvgPoints.map(_._1),
+      ltvSumAndAvgPoints.map(_._2)
+    )
+
+    val kClusters = dataInput
+      .groupBy("cluster")
+      .count()
+      .select("cluster")
+      .collect()
+      .map(k => k.getInt(0))
+      .sorted
+      .toList
+
+    val ltvSumAndAvgPointsByClusters = kClusters.map{ k =>
+      val ltvByCluster = calculateLTVByUserDaily(dataInput.where(col("cluster")===k))
+      val ltvSumAndAvgPointsByCluster = calculateLTVPointsByDate(ltvByCluster)
+        .collect()
+        .map { a =>
+          (
+            LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
+            a.getDouble(1),
+            a.getDouble(2)
+          )
+        }
+        .collect{
+          case (Some(date), sumLTV, avgLTV) => (LTVPerDate(sumLTV, date), LTVPerDate(avgLTV, date))
+        }
+        .toList
+
+      LTVPointsPerCluster(
+        ltvSumAndAvgPointsByCluster.map(_._1),
+        ltvSumAndAvgPointsByCluster.map(_._2),
+        k
+      )
+    }
 
     //Sum ltv
-    plotLTVByDate(ltvByPeriodList.map(a => LTVPerDate(a.getDouble(1), a.getDate(0))).toList, "Sum")
+    plotLTVByDate(
+      ltvSumAndAvgPointsTotal.sumLTVPoints,
+      ltvSumAndAvgPointsByClusters.map(p => (p.sumLTVPoints, p.k)),
+      "Sum"
+    )
 
     //Avg ltv
-    plotLTVByDate(ltvByPeriodList.map(a => LTVPerDate(a.getDouble(2), a.getDate(0))).toList, "Avg")
+    plotLTVByDate(
+      ltvSumAndAvgPointsTotal.avgLTVPoints,
+      ltvSumAndAvgPointsByClusters.map(p => (p.avgLTVPoints, p.k)),
+      "Avg")
   }
 
 

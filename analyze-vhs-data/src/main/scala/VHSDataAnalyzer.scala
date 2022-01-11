@@ -45,6 +45,42 @@ object VHSDataAnalyzer extends Logging {
       .where(filterByPartition(col(partitionSource)))
   }
 
+  def readClusterData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRange: CodMonthRange): DataFrame = {
+    log.info("read cluster data")
+
+    val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
+    val filterBetweenDates = createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
+
+    val filterByPartition = behavior match {
+      case Daily => createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
+      case _ => createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate)
+    }
+
+    val fileNameSource = "cluster-data"
+    val partitionSource = getPartitionSourceFromBehavior(behavior)
+
+    val enrichedDataDf = localFileReader
+      .read(
+        localFileReaderConfig.folderName,
+        fileNameSource
+      )
+
+    enrichedDataDf
+      .select(
+        col("userId"),
+        col("gameId"),
+        col("numLevelsCompleted"),
+        col("numAddsWatched"),
+        col("numPurchasesDone"),
+        col("partOfDay"),
+        transformPartOfDayToNumber(col("partOfDay")) as "partOfDayNumber",
+        col("flagOrganic"),
+        col("cluster"),
+        col(partitionSource)
+      )
+      .where(filterByPartition(col(partitionSource)))
+  }
+
   def main(args: Array[String]): Unit = {
     AppConfig.loadAnalyzerConfig(args) match {
       case Right(AnalyzerAppConfig(localFileReaderConfig: LocalFileReaderConfig, methodAnalyzer, behavior@(Daily | Monthly), dateRange)) =>
@@ -68,13 +104,13 @@ object VHSDataAnalyzer extends Logging {
             log.info("segmentation of vhs data")
             KMeansMethod.showAndSaveKMeansResults(enrichedData, k, getPartitionSourceFromBehavior(behavior))
           case LTVAnalyzer(attribute) =>
+            val clusterData = readClusterData(spark, localFileReaderConfig, Daily, dateRange).cache()
             attribute match {
-              case LTVAttribute.Cluster => LTVMethod.calculateAndSaveLTVByCluster(spark)
+              case LTVAttribute.Cluster => LTVMethod.calculateAndSaveLTVByCluster(clusterData)
               case LTVAttribute.User =>
-                val enrichedData = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
                 behavior match {
-                  case Daily => LTVMethod.calculateAndSaveLTVByUserDaily(enrichedData)
-                  case Monthly => LTVMethod.calculateAndSaveLTVByUserMonthly(enrichedData)
+                  case Daily => LTVMethod.calculateAndSaveLTVByUserDaily(clusterData)
+                  case Monthly => LTVMethod.calculateAndSaveLTVByUserMonthly(clusterData)
                   case _ => log.warn(s"LTV behaviour not supported ")
                 }
             }

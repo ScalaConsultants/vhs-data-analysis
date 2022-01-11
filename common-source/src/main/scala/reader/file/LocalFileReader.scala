@@ -12,4 +12,8 @@ case class LocalFileReader(spark: SparkSession, mainSourcePath: String) extends 
       .schema(schemaResult)
       .parquet(s"$mainSourcePath/$folderName/$fileName")
 
+  def read(folderName: String, fileName: String): DataFrame =
+    spark
+      .read
+      .parquet(s"$mainSourcePath/$folderName/$fileName")
 }
