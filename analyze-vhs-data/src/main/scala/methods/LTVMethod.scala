@@ -8,6 +8,10 @@ import plotly.layout._
 import plotly.Plotly._
 import plotly.element.LocalDateTime
 import utils.DateColumnOperations.generateCodMonthFromDate
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.ml.regression.{LinearRegression, RandomForestRegressor}
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 
 object LTVMethod {
   case class LTVPerCluster(ltv: Double, k: Int)
@@ -71,9 +75,9 @@ object LTVMethod {
   }
 
   def calculateLTVByUserDaily(dataInput: DataFrame): DataFrame = {
-    /*val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
+    val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
       count(col("partOfDay")) as "lifetime",
-      sum("numAddsWatched").multiply(0.015) as "revenue"
+      avg("numAddsWatched").multiply(0.015) as "revenue"
     )
 
     val dauPerDayDf =  dataInput.groupBy("date").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
@@ -86,16 +90,16 @@ object LTVMethod {
         col("arpdau").multiply(col("lifetime")) as "ltv",
         col("date")
       )
-    ltvDf*/
+    ltvDf
 
-    val df = dataInput.groupBy("userId", "date").agg(
+    /*val df = dataInput.groupBy("userId", "date").agg(
       count(col("partOfDay")) as "lifetime",
       avg("numAddsWatched").multiply(0.015) as "revenue"
     ).withColumn("ltv", col("lifetime").multiply(col("revenue")))
 
     df.show(100)
 
-    df
+    df*/
   }
 
   def calculateLTVPointsByDate(ltvDf: DataFrame): DataFrame = {
@@ -105,11 +109,6 @@ object LTVMethod {
     ).orderBy("date")
     ltvByPeriodDf
   }
-
-  import org.apache.spark.ml.Pipeline
-  import org.apache.spark.ml.feature.VectorAssembler
-  import org.apache.spark.ml.regression.{LinearRegression, RandomForestRegressor}
-  import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 
   def linearRegressionLTV(dataInput: DataFrame): Unit = {
     //val dataInput = dataInputT.where((col("ltv")>0 && col("numLevelsCompleted")>0))
@@ -179,7 +178,7 @@ object LTVMethod {
       .agg(
         //avg("numLevelsCompleted") as "numLevelsCompleted",
         avg("numAddsWatched") as "numAddsWatched",
-        count_distinct(col("partOfDay")) as "partOfDayNumber"
+        count(col("partOfDay")) as "partOfDayNumber"
       )
       .join(ltvDf, Seq("userId", "date"), "left_outer")
 
