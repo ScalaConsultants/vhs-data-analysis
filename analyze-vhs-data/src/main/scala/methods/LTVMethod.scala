@@ -1,5 +1,6 @@
 package methods
 
+import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import plotly._
@@ -70,7 +71,7 @@ object LTVMethod {
   }
 
   def calculateLTVByUserDaily(dataInput: DataFrame): DataFrame = {
-    val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
+    /*val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
       count(col("partOfDay")) as "lifetime",
       sum("numAddsWatched").multiply(0.015) as "revenue"
     )
@@ -85,7 +86,16 @@ object LTVMethod {
         col("arpdau").multiply(col("lifetime")) as "ltv",
         col("date")
       )
-    ltvDf
+    ltvDf*/
+
+    val df = dataInput.groupBy("userId", "date").agg(
+      count(col("partOfDay")) as "lifetime",
+      avg("numAddsWatched").multiply(0.015) as "revenue"
+    ).withColumn("ltv", col("lifetime").multiply(col("revenue")))
+
+    df.show(100)
+
+    df
   }
 
   def calculateLTVPointsByDate(ltvDf: DataFrame): DataFrame = {
@@ -96,6 +106,58 @@ object LTVMethod {
     ltvByPeriodDf
   }
 
+  import org.apache.spark.ml.Pipeline
+  import org.apache.spark.ml.feature.VectorAssembler
+  import org.apache.spark.ml.regression.{LinearRegression, RandomForestRegressor}
+  import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+
+  def linearRegressionLTV(dataInput: DataFrame): Unit = {
+    //val dataInput = dataInputT.where((col("ltv")>0 && col("numLevelsCompleted")>0))
+    val Array(trainData, testData) = dataInput.randomSplit(Array(0.80, 0.20))
+
+    val vectorAssembler = new VectorAssembler()
+      .setInputCols(Array(/*"numLevelsCompleted", */"numAddsWatched", "partOfDayNumber"))
+      .setOutputCol("featureVector")
+
+    val lr = //new LinearRegression()
+      new RandomForestRegressor()
+        .setFeaturesCol("featureVector")
+        .setLabelCol("ltv")
+        .setPredictionCol("prediction")
+    //.setMaxIter(80)
+    //.setRegParam(0.3)
+    //.setElasticNetParam(0.8)
+
+    val pipeline = new Pipeline().setStages(Array(vectorAssembler, lr))
+
+    val modelLinearRegression = pipeline.fit(trainData)
+
+    // Make predictions.
+    val predictions = modelLinearRegression.transform(testData)
+
+    // Select example rows to display.
+    // predictions.select("featureVector", "ltv", "prediction").show(15)
+
+    val evaluator = new RegressionEvaluator()
+      .setPredictionCol("prediction")
+      .setLabelCol("ltv")
+      .setMetricName("r2")
+
+    val metric = evaluator.evaluate(predictions)
+
+    println()
+    println(s"\naccuracy: ${metric}\n")
+    println()
+
+    val tmpDf = predictions.withColumn("error", abs((col("ltv") - col("prediction"))/col("ltv")))
+
+    tmpDf.where(col("error").gt(0.30)).show(20)
+
+    tmpDf.where(col("error").lt(0.30)).show(20)
+
+    tmpDf.select(sum(when(col("error").lt(0.30), lit(1)).otherwise(lit(0)))/count("*") as "accuracy").show()
+  }
+
   def calculateAndSaveLTVByUserDaily(dataInput: DataFrame): Unit = {
     val ltvDf = calculateLTVByUserDaily(dataInput)
 
@@ -103,69 +165,96 @@ object LTVMethod {
 
     ltvByPeriodDf.show(30)
 
-    val ltvSumAndAvgPoints = ltvByPeriodDf
-      .collect()
-      .map { a =>
-        (
-          LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
-          a.getDouble(1),
-          a.getDouble(2)
+    /*val dataInputLTV = dataInput
+      .groupBy("userId", "date")
+      .agg(
+        sum("numLevelsCompleted") as "numLevelsCompleted",
+        sum("numAddsWatched") as "numAddsWatched",
+        avg("partOfDayNumber") as "partOfDayNumber"
+      )
+      .join(ltvDf, Seq("userId", "date"), "left_outer")*/
+
+    val dataInputLTV = dataInput
+      .groupBy("userId", "date")
+      .agg(
+        //avg("numLevelsCompleted") as "numLevelsCompleted",
+        avg("numAddsWatched") as "numAddsWatched",
+        count_distinct(col("partOfDay")) as "partOfDayNumber"
+      )
+      .join(ltvDf, Seq("userId", "date"), "left_outer")
+
+    linearRegressionLTV(dataInputLTV)
+
+    /*ltvDf
+      .write
+      .mode("overwrite")
+      .partitionBy("date")
+      .parquet("data-models/output/ltvDaily")*/
+
+    /*
+        val ltvSumAndAvgPoints = ltvByPeriodDf
+          .collect()
+          .map { a =>
+            (
+              LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
+              a.getDouble(1),
+              a.getDouble(2)
+            )
+          }
+          .collect{
+            case (Some(date), sumLTV, avgLTV) => (LTVPerDate(sumLTV, date), LTVPerDate(avgLTV, date))
+          }
+          .toList
+
+        val ltvSumAndAvgPointsTotal = LTVPointsPerDate(
+          ltvSumAndAvgPoints.map(_._1),
+          ltvSumAndAvgPoints.map(_._2)
         )
-      }
-      .collect{
-        case (Some(date), sumLTV, avgLTV) => (LTVPerDate(sumLTV, date), LTVPerDate(avgLTV, date))
-      }
-      .toList
 
-    val ltvSumAndAvgPointsTotal = LTVPointsPerDate(
-      ltvSumAndAvgPoints.map(_._1),
-      ltvSumAndAvgPoints.map(_._2)
-    )
+        val kClusters = dataInput
+          .groupBy("cluster")
+          .count()
+          .select("cluster")
+          .collect()
+          .map(k => k.getInt(0))
+          .sorted
+          .toList
 
-    val kClusters = dataInput
-      .groupBy("cluster")
-      .count()
-      .select("cluster")
-      .collect()
-      .map(k => k.getInt(0))
-      .sorted
-      .toList
+        val ltvSumAndAvgPointsByClusters = kClusters.map{ k =>
+          val ltvByCluster = calculateLTVByUserDaily(dataInput.where(col("cluster")===k))
+          val ltvSumAndAvgPointsByCluster = calculateLTVPointsByDate(ltvByCluster)
+            .collect()
+            .map { a =>
+              (
+                LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
+                a.getDouble(1),
+                a.getDouble(2)
+              )
+            }
+            .collect{
+              case (Some(date), sumLTV, avgLTV) => (LTVPerDate(sumLTV, date), LTVPerDate(avgLTV, date))
+            }
+            .toList
 
-    val ltvSumAndAvgPointsByClusters = kClusters.map{ k =>
-      val ltvByCluster = calculateLTVByUserDaily(dataInput.where(col("cluster")===k))
-      val ltvSumAndAvgPointsByCluster = calculateLTVPointsByDate(ltvByCluster)
-        .collect()
-        .map { a =>
-          (
-            LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
-            a.getDouble(1),
-            a.getDouble(2)
+          LTVPointsPerCluster(
+            ltvSumAndAvgPointsByCluster.map(_._1),
+            ltvSumAndAvgPointsByCluster.map(_._2),
+            k
           )
         }
-        .collect{
-          case (Some(date), sumLTV, avgLTV) => (LTVPerDate(sumLTV, date), LTVPerDate(avgLTV, date))
-        }
-        .toList
 
-      LTVPointsPerCluster(
-        ltvSumAndAvgPointsByCluster.map(_._1),
-        ltvSumAndAvgPointsByCluster.map(_._2),
-        k
-      )
-    }
+        //Sum ltv
+        plotLTVByDate(
+          ltvSumAndAvgPointsTotal.sumLTVPoints,
+          ltvSumAndAvgPointsByClusters.map(p => (p.sumLTVPoints, p.k)),
+          "Sum"
+        )
 
-    //Sum ltv
-    plotLTVByDate(
-      ltvSumAndAvgPointsTotal.sumLTVPoints,
-      ltvSumAndAvgPointsByClusters.map(p => (p.sumLTVPoints, p.k)),
-      "Sum"
-    )
-
-    //Avg ltv
-    plotLTVByDate(
-      ltvSumAndAvgPointsTotal.avgLTVPoints,
-      ltvSumAndAvgPointsByClusters.map(p => (p.avgLTVPoints, p.k)),
-      "Avg")
+        //Avg ltv
+        plotLTVByDate(
+          ltvSumAndAvgPointsTotal.avgLTVPoints,
+          ltvSumAndAvgPointsByClusters.map(p => (p.avgLTVPoints, p.k)),
+          "Avg")*/
   }
 
 
