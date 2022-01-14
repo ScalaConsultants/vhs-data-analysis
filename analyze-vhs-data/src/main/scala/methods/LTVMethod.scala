@@ -115,17 +115,17 @@ object LTVMethod {
     val Array(trainData, testData) = dataInput.randomSplit(Array(0.80, 0.20))
 
     val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array(/*"numLevelsCompleted", */"numAddsWatched", "partOfDayNumber"))
+      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "partOfDayNumber"))
       .setOutputCol("featureVector")
 
-    val lr = //new LinearRegression()
-      new RandomForestRegressor()
+    val lr = new LinearRegression()
+     // new RandomForestRegressor()
         .setFeaturesCol("featureVector")
         .setLabelCol("ltv")
         .setPredictionCol("prediction")
-    //.setMaxIter(80)
-    //.setRegParam(0.3)
-    //.setElasticNetParam(0.8)
+    .setMaxIter(80)
+    /*.setRegParam(0.3)
+    .setElasticNetParam(0.8)*/
 
     val pipeline = new Pipeline().setStages(Array(vectorAssembler, lr))
 
@@ -144,17 +144,15 @@ object LTVMethod {
 
     val metric = evaluator.evaluate(predictions)
 
-    println()
-    println(s"\naccuracy: ${metric}\n")
-    println()
-
-    val tmpDf = predictions.withColumn("error", abs((col("ltv") - col("prediction"))/col("ltv")))
+    /*val tmpDf = predictions.withColumn("error", abs((col("ltv") - col("prediction"))/col("ltv")))
 
     tmpDf.where(col("error").gt(0.30)).show(20)
 
     tmpDf.where(col("error").lt(0.30)).show(20)
 
-    tmpDf.select(sum(when(col("error").lt(0.30), lit(1)).otherwise(lit(0)))/count("*") as "accuracy").show()
+    tmpDf.select(sum(when(col("error").lt(0.30), lit(1)).otherwise(lit(0)))/count("*") as "accuracy").show()*/
+
+    predictions.withColumn("accuracy", lit(metric)).select("accuracy").limit(1).show()
   }
 
   def calculateAndSaveLTVByUserDaily(dataInput: DataFrame): Unit = {
@@ -176,7 +174,7 @@ object LTVMethod {
     val dataInputLTV = dataInput
       .groupBy("userId", "date")
       .agg(
-        //avg("numLevelsCompleted") as "numLevelsCompleted",
+        avg("numLevelsCompleted") as "numLevelsCompleted",
         avg("numAddsWatched") as "numAddsWatched",
         count(col("partOfDay")) as "partOfDayNumber"
       )
