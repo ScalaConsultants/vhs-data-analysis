@@ -32,6 +32,10 @@ object VHSDataEnricher extends Logging {
             )
             .where(col("attribution").isNotNull)
             .withColumn("date", generateDateFromTimestamp(col("timestamp")))
+            .filter(
+              (!col("timezone").contains("."))&&
+                createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate)
+            )
             .cache()
 
         val playerBehaviorSchema = mergeSchemas(EventsSchema.getAllPlayerBehaviorEventsSchema)
@@ -47,6 +51,10 @@ object VHSDataEnricher extends Logging {
             .withColumn("datetime", generateDateTimeFromTimestamp(col("timestamp")))
             .withColumn("date", generateDateFromDateTime(col("datetime")))
             .filter(createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate))
+            .filter(
+              (!col("timezone").contains("."))&&
+                createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate)
+            )
             .cache()
 
         enrichVHSData(behavior, playerInfoData, playerBehaviorData, "data/output/enriched-data")
