@@ -15,6 +15,7 @@ object DataEnricherConstants {
   val PURCHASE_REJECTED = "REJECTED"
   val PURCHASE_CANCELED = "CANCELED"
 
+  val FILENAME_HOURLY_RESULT = "hh_playerbehavior"
   val FILENAME_DAILY_RESULT = "hd_playerbehavior"
   val FILENAME_MONTHLY_RESULT = "hm_playerbehavior"
 

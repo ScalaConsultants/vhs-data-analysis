@@ -27,6 +27,8 @@ object DataEnricherUtil {
 
   def isPurchaseCanceled: Column = col("status") === PURCHASE_CANCELED
 
+  def getHourlyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_HOURLY_RESULT"
+
   def getDailyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_DAILY_RESULT"
 
   def getMonthlyResultPath(outputPath: String): String = s"$outputPath/$FILENAME_MONTHLY_RESULT"

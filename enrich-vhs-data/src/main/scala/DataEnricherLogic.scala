@@ -28,7 +28,7 @@ object DataEnricherLogic extends Logging {
       col("levelProgress"),
       trim(col("status")) as "status",
       col("timezone") as "timezone",
-      generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
+      getHourOfDayFromDateTime(col("datetime"), col("timezone")) as "hourOfDay",
       col("date")
     )
   }
@@ -42,7 +42,7 @@ object DataEnricherLogic extends Logging {
       trim(col("adType")) as "adType",
       trim(col("status")) as "status",
       col("timezone") as "timezone",
-      generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
+      getHourOfDayFromDateTime(col("datetime"), col("timezone")) as "hourOfDay",
       col("date")
     )
   }
@@ -58,7 +58,7 @@ object DataEnricherLogic extends Logging {
       trim(col("currency")) as "currency",
       trim(col("status")) as "status",
       col("timezone") as "timezone",
-      generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
+      getHourOfDayFromDateTime(col("datetime"), col("timezone")) as "hourOfDay",
       col("date")
     )
   }
@@ -74,7 +74,7 @@ object DataEnricherLogic extends Logging {
 
   def enrichLevelsData(levelsCleanedDf: DataFrame): DataFrame =
     levelsCleanedDf
-      .groupBy("userId", "gameId", "date", "partOfDay")
+      .groupBy("userId", "gameId", "date", "hourOfDay")
       .agg(
         sum(when(isLevelCompleted, lit(1)).otherwise(lit(0))) as "numLevelsCompleted",
         sum(when(isLevelStarted, lit(1)).otherwise(lit(0))) as "numLevelsStarted"
@@ -82,7 +82,7 @@ object DataEnricherLogic extends Logging {
 
   def enrichAddsData(addsCleanedDf: DataFrame): DataFrame =
     addsCleanedDf
-      .groupBy("userId", "gameId", "date", "partOfDay")
+      .groupBy("userId", "gameId", "date", "hourOfDay")
       .agg(
         sum(when(isAddWatched, lit(1)).otherwise(lit(0))) as "numAddsWatched",
         sum(when(isAddIgnored, lit(1)).otherwise(lit(0))) as "numAddsIgnored",  //-- Bug in the game
@@ -91,7 +91,7 @@ object DataEnricherLogic extends Logging {
 
   def enrichPurchasesData(purchasesCleanedDf: DataFrame): DataFrame =
     purchasesCleanedDf
-      .groupBy("userId", "gameId", "date", "partOfDay")
+      .groupBy("userId", "gameId", "date", "hourOfDay")
       .agg(
         sum(when(isPurchaseDone, lit(1)).otherwise(lit(0))) as "numPurchasesDone",
         sum(when(isPurchaseDone, col("amount")).otherwise(lit(0))) as "amountPurchasesDoneDol",
@@ -101,8 +101,8 @@ object DataEnricherLogic extends Logging {
         sum(when(isPurchaseCanceled, col("amount")).otherwise(lit(0))) as "amountPurchasesCanceledDol"
       )
 
-  def enrichVHSDataPerDay(playerInfoData: DataFrame,
-                          playerBehaviorData: DataFrame): DataFrame = {
+  def enrichVHSDataPerHourOfDay(playerInfoData: DataFrame,
+                           playerBehaviorData: DataFrame): DataFrame = {
 
     val playersCleanedDf = cleanPlayersData(playerInfoData)
     val levelsCleanedDf = cleanLevelsData(playerBehaviorData)
@@ -116,10 +116,10 @@ object DataEnricherLogic extends Logging {
 
     val enrichedPlayersDataDf = levelsEnrichDataDf
       .join(playersEnrichDataDf, Seq("userId", "gameId"), "left_outer")
-      .join(addsEnrichDataDf, Seq("userId", "gameId", "date", "partOfDay"), "left_outer")
-      .join(purchasesEnrichDataDf, Seq("userId", "gameId", "date", "partOfDay"), "left_outer")
+      .join(addsEnrichDataDf, Seq("userId", "gameId", "date", "hourOfDay"), "left_outer")
+      .join(purchasesEnrichDataDf, Seq("userId", "gameId", "date", "hourOfDay"), "left_outer")
 
-    val enrichedDataPerDayDf = enrichedPlayersDataDf.select(
+    val enrichedDataPerHourOfDayDf = enrichedPlayersDataDf.select(
       col("userId"),
       col("gameId"),
       coalesce(col("flagOrganic"), lit(0)) as "flagOrganic",
@@ -135,11 +135,42 @@ object DataEnricherLogic extends Logging {
       coalesce(col("amountPurchasesRejectedDol"), lit(0)) as "amountPurchasesRejectedDol",
       coalesce(col("numPurchasesCanceled"), lit(0)) as "numPurchasesCanceled",
       coalesce(col("amountPurchasesCanceledDol"), lit(0)) as "amountPurchasesCanceledDol",
-      col("partOfDay"),
+      col("hourOfDay"),
+      generatePartOfDayFromHour(col("hourOfDay")) as "partOfDay",
+      dayofweek(col("date")) as "dayOfWeek",
       col("date")
     )
 
-    enrichedDataPerDayDf
+    enrichedDataPerHourOfDayDf
+  }
+  def enrichVHSDataPerDay(enrichVHSDataPerHourOfDay: DataFrame): DataFrame = {
+    val enrichedDataPerMonthDf = enrichVHSDataPerHourOfDay
+      .groupBy("userId", "gameId", "date", "partOfDay")
+      .agg(
+        max("flagOrganic") as "flagOrganic",
+        min("dateRegistration") as "dateRegistration",
+        sum("numLevelsCompleted") as "numLevelsCompleted",
+        sum("numLevelsStarted") as "numLevelsStarted",
+        sum("numAddsWatched") as "numAddsWatched",
+        sum("numAddsIgnored") as "numAddsIgnored",
+        sum("numAddsProposed") as "numAddsProposed",
+        sum("numPurchasesDone") as "numPurchasesDone",
+        sum("amountPurchasesDoneDol") as "amountPurchasesDoneDol",
+        sum("numPurchasesRejected") as "numPurchasesRejected",
+        sum("amountPurchasesRejectedDol") as "amountPurchasesRejectedDol",
+        sum("numPurchasesCanceled") as "numPurchasesCanceled",
+        sum("amountPurchasesCanceledDol") as "amountPurchasesCanceledDol",
+        max("dayOfWeek") as "dayOfWeek",
+      )
+
+    enrichedDataPerMonthDf
+  }
+
+  def enrichVHSDataPerDay(playerInfoData: DataFrame,
+                            playerBehaviorData: DataFrame): DataFrame = {
+
+    val vhsEnrichedPerHourOfDayDf = enrichVHSDataPerHourOfDay(playerInfoData, playerBehaviorData)
+    enrichVHSDataPerDay(vhsEnrichedPerHourOfDayDf)
   }
 
   def enrichVHSDataPerMonth(enrichedDataPerDayDf: DataFrame): DataFrame = {
@@ -179,22 +210,27 @@ object DataEnricherLogic extends Logging {
                     outputPath: String): Unit =
     behavior match {
       case Daily =>
-        val vhsEnrichedPerDayDf = enrichVHSDataPerDay(playerInfoData, playerBehaviorData)
+        val vhsEnrichedPerHourOfDayDf = enrichVHSDataPerHourOfDay(playerInfoData, playerBehaviorData).cache()
+        val vhsEnrichedPerDayDf = enrichVHSDataPerDay(vhsEnrichedPerHourOfDayDf)
+        saveEnrichedData(vhsEnrichedPerHourOfDayDf, Seq("date", "hourOfDay"), getHourlyResultPath(outputPath))
         saveEnrichedData(vhsEnrichedPerDayDf, Seq("date", "partOfDay"), getDailyResultPath(outputPath))
-        vhsEnrichedPerDayDf.show(15)
+        vhsEnrichedPerDayDf.orderBy(desc("date")).show(15)
         log.info(s"EnrichedDataPerDay count: ${vhsEnrichedPerDayDf.count()}")
       case Monthly =>
         val vhsEnrichedPerMonthDf = enrichVHSDataPerMonth(playerInfoData, playerBehaviorData)
         saveEnrichedData(vhsEnrichedPerMonthDf, Seq("codMonth", "partOfDay"), getMonthlyResultPath(outputPath))
-        vhsEnrichedPerMonthDf.show(15)
+        vhsEnrichedPerMonthDf.orderBy(desc("date")).show(15)
         log.info(s"EnrichedDataPerMonth count: ${vhsEnrichedPerMonthDf.count()}")
       case Both =>
-        val vhsEnrichedPerDayDf = enrichVHSDataPerDay(playerInfoData, playerBehaviorData).cache()
+        val vhsEnrichedPerHourOfDayDf = enrichVHSDataPerHourOfDay(playerInfoData, playerBehaviorData).cache()
+        val vhsEnrichedPerDayDf = enrichVHSDataPerDay(vhsEnrichedPerHourOfDayDf)
         val vhsEnrichedPerMonthDf = enrichVHSDataPerMonth(vhsEnrichedPerDayDf)
+        saveEnrichedData(vhsEnrichedPerHourOfDayDf, Seq("date", "hourOfDay"), getHourlyResultPath(outputPath))
         saveEnrichedData(vhsEnrichedPerDayDf, Seq("date", "partOfDay"), getDailyResultPath(outputPath))
         saveEnrichedData(vhsEnrichedPerMonthDf, Seq("codMonth", "partOfDay"), getMonthlyResultPath(outputPath))
-        vhsEnrichedPerDayDf.show(15)
-        vhsEnrichedPerMonthDf.show(15)
-        log.info(s"EnrichedDataPerDay count: ${vhsEnrichedPerDayDf.count()} ,  enrichedDataPerMonth count: ${vhsEnrichedPerMonthDf.count()}")
+        vhsEnrichedPerHourOfDayDf.orderBy(desc("date")).show(15)
+        vhsEnrichedPerDayDf.orderBy(desc("date")).show(15)
+        vhsEnrichedPerMonthDf.orderBy(desc("codMonth")).show(15)
+        log.info(s"vhsEnrichedPerHourOfDayDf count: ${vhsEnrichedPerHourOfDayDf.count()}, EnrichedDataPerDay count: ${vhsEnrichedPerDayDf.count()} ,  enrichedDataPerMonth count: ${vhsEnrichedPerMonthDf.count()}")
     }
 }
