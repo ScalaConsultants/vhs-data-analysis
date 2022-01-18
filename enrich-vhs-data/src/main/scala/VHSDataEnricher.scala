@@ -44,11 +44,12 @@ object VHSDataEnricher extends Logging {
               playerBehaviorSchema
             )
             .where(col("levelId").isNotNull || col("adType").isNotNull || col("amount").isNotNull)
+            .withColumn("timezone", regexp_replace(col("timezone"), "\\.", ":"))
             .withColumn("datetime", generateDateTimeFromTimestamp(col("timestamp")))
             .withColumn("date", generateDateFromDateTime(col("datetime")))
             .filter(createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate))
             .cache()
-
+//when(col("timezone").contains("."), regexp_replace(col("timezone"), ".", ":")).otherwise(col("timezone"))
         enrichVHSData(behavior, playerInfoData, playerBehaviorData, "data/output/enriched-data")
 
         spark.stop()

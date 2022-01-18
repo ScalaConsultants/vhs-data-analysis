@@ -27,6 +27,7 @@ object DataEnricherLogic extends Logging {
       col("levelDifficulty"),
       col("levelProgress"),
       trim(col("status")) as "status",
+      col("timezone") as "timezone",
       generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
       col("date")
     )
@@ -40,6 +41,7 @@ object DataEnricherLogic extends Logging {
       col("placementId"),
       trim(col("adType")) as "adType",
       trim(col("status")) as "status",
+      col("timezone") as "timezone",
       generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
       col("date")
     )
@@ -55,6 +57,7 @@ object DataEnricherLogic extends Logging {
       col("amount"),
       trim(col("currency")) as "currency",
       trim(col("status")) as "status",
+      col("timezone") as "timezone",
       generatePartOfDayFromDateTime(col("datetime"), getDefaultTimezoneIfNull(col("timezone"))) as "partOfDay",
       col("date")
     )
@@ -110,11 +113,6 @@ object DataEnricherLogic extends Logging {
     val levelsEnrichDataDf = enrichLevelsData(levelsCleanedDf)
     val addsEnrichDataDf = enrichAddsData(addsCleanedDf)
     val purchasesEnrichDataDf = enrichPurchasesData(purchasesCleanedDf)
-
-    playersEnrichDataDf.show(5)
-    levelsEnrichDataDf.show(5)
-    addsEnrichDataDf.show(5)
-    purchasesEnrichDataDf.show(5)
 
     val enrichedPlayersDataDf = levelsEnrichDataDf
       .join(playersEnrichDataDf, Seq("userId", "gameId"), "left_outer")
