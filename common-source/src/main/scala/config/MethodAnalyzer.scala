@@ -23,6 +23,12 @@ object LTVAnalyzer {
 }
 
 
+final case class Retention() extends MethodAnalyzer
+
+object Retention {
+  def methodLabel:String = "retention"
+}
+
 sealed trait LTVAttribute
 
 object LTVAttribute {
@@ -65,12 +71,18 @@ object MethodAnalyzer {
       case _ => Left("invalid inputs for LTV method")
     }
 
+  private def getRetentionMethodFromOpts(mapOpts: Map[String, String]): Either[String, Retention] = {
+    mapOpts.get("attribute").flatMap(LTVAttribute.fromString) match {
+      case _ =>  Right(Retention())
+    }
+  }
 
   def getAnalyzerMethodFromOpts(mapOpts: Map[String, String]): Either[String, MethodAnalyzer] = {
     mapOpts.get("method")  match {
       case Some(method) if method.equalsIgnoreCase(ElbowAnalyzer.methodLabel) =>  getElbowMethodFromOpts(mapOpts)
       case Some(method) if method.equalsIgnoreCase(KMeansAnalyzer.methodLabel) =>  getKMeansMethodFromOpts(mapOpts)
       case Some(method) if method.equalsIgnoreCase(LTVAnalyzer.methodLabel) => getLTVMethodFromOpts(mapOpts)
+      case Some(method) if method.equalsIgnoreCase(Retention.methodLabel) => getRetentionMethodFromOpts(mapOpts)
       case _ => Left("invalid method analyzer")
     }
   }

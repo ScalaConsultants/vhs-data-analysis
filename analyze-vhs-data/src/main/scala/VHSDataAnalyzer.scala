@@ -114,6 +114,10 @@ object VHSDataAnalyzer extends Logging {
                   case _ => log.warn(s"LTV behaviour not supported ")
                 }
             }
+          case Retention() =>
+            val clusterData = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
+//            NRetentionMethod.calculateRetentionByDays(clusterData)
+            NRetentionMethod.calculateRetentionByBracket(clusterData, 3)
         }
 
         spark.stop()
