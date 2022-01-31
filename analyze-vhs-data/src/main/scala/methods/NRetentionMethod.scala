@@ -73,24 +73,25 @@ object NRetentionMethod {
 
   }
 
+  def formatDay(d: Int): String = {
+    if((d/10)<1)
+      s"0$d"
+    else
+      s"$d"
+  }
+
   def calculateRetention2(playerEvents: DataFrame, enrichedData: DataFrame): Unit = {
     val newUsersDf =  playerEvents
-      .where((col("date") >= "2021-11-29") && (col("date") <= "2021-11-30"))
-      //.groupBy("date")
+      .groupBy("date")
       .agg(
         count_distinct(col("userId")) as "newUsers"
       )
-      //.orderBy(asc("date"))
-
-    val initialNewUsers = newUsersDf.first()
-
-    //val (initialDate, numberOfNewUsers) =  initialNewUsers.getDate(0) -> initialNewUsers.getLong(1)
-    val numberOfNewUsers = initialNewUsers.getLong(0)
-
-    val listOfNewUsers = playerEvents
-      .select("userId").distinct()
-      .collect()
-      .map(a => a.getString(0))
+      .select(
+        col("date"),
+        date_add(col("date"),30) as "endDate",
+        col("newUsers")
+      )
+      .cache()
 
     val enrichedDataPerDay = enrichedData
       .groupBy("date", "userId")
@@ -98,58 +99,76 @@ object NRetentionMethod {
         sum("numLevelsCompleted") as "numLevelsCompleted",
         sum("numLevelsStarted") as "numLevelsStarted"
       )
-      .where(
-        ((col("numLevelsStarted")>0) || (col("numLevelsCompleted")>0))
-        && (col("userId").isin(listOfNewUsers:_*))
-      )
+      .cache()
 
-    val activePlayersPerDay = enrichedDataPerDay
-      .groupBy("date")
-      .agg(
-        count_distinct(col("userId")) as "activePlayers"
-      )
+    val pivotDate = (1 to 30).map( d => s"2021-11-${formatDay(d)}")
+
+    pivotDate.foreach{ pivotDate =>
+      val newUsersPerDateDf =  newUsersDf
+        .where(col("date") === pivotDate )
+
+      if(newUsersPerDateDf.count() > 0) {
+        val initialNewUsers = newUsersPerDateDf.first()
+
+        val (endDate, numberOfNewUsers) = initialNewUsers.getDate(1) -> initialNewUsers.getLong(2)
+
+        val listOfNewUsers = playerEvents
+          .where(col("date") === pivotDate)
+          .select("userId").distinct()
+          .collect()
+          .map(a => a.getString(0))
+
+        val activePlayersPerDay = enrichedDataPerDay
+          .where(
+            ((col("date") > pivotDate) && (col("date") <= endDate))
+              &&
+              ((col("numLevelsStarted") > 0) || (col("numLevelsCompleted") > 0))
+              && (col("userId").isin(listOfNewUsers: _*))
+          )
+          .groupBy("date")
+          .agg(
+            count_distinct(col("userId")) as "activePlayers"
+          )
 
 
-    val retentionByDate = activePlayersPerDay
-      .select(
-        col("date"),
-        ((col("activePlayers")/numberOfNewUsers)*100) as "retention"
-      )
-      .orderBy("date")
+        val retentionByDate = activePlayersPerDay
+          .select(
+            col("date"),
+            ((col("activePlayers") / numberOfNewUsers) * 100) as "retention"
+          )
+          .orderBy("date")
 
-    val retentionByDatePoints = retentionByDate
-      .collect()
-      .map { a =>
-        (
-          LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
-          a.getDouble(1)
-        )
+        val retentionByDatePoints = retentionByDate
+          .collect()
+          .map { a =>
+            (
+              LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
+              a.getDouble(1)
+            )
+          }
+          .collect {
+            case (Some(date), retention) => (date, retention)
+          }
+          .toList
+
+        if (retentionByDatePoints.nonEmpty) {
+          val xDate = retentionByDatePoints.map(_._1)
+          val yValue = retentionByDatePoints.map(_._2)
+
+          val plot = Scatter(xDate, yValue).withName("Retention by Date")
+
+          val lay = Layout().withTitle(s"Retention by Date")
+          plot.plot(s"plots/retention/retentionByDate_${pivotDate}_numberOfNewUsers_$numberOfNewUsers.html", lay, useCdn = true,
+            openInBrowser = false,
+            addSuffixIfExists = true)
+        }
       }
-      .collect{
-        case (Some(date), retention) => (date, retention)
-      }
-      .toList
-
-    val xDate = retentionByDatePoints.map(_._1)
-    val yValue = retentionByDatePoints.map(_._2)
-
-    val plot = Scatter(xDate, yValue).withName("Retention by Date")
-
-    val lay = Layout().withTitle(s"Retention by Date")
-    plot.plot(s"plots/retentionByDate.html", lay, useCdn = true,
-      openInBrowser = false,
-      addSuffixIfExists = true)
-
-    newUsersDf.show(50)
-
-    activePlayersPerDay
-      .select(
-        col("date"),
-        col("activePlayers") ,
-        lit(numberOfNewUsers) as "newPlayers"
-      )
+    }
+    newUsersDf
+      .where(col("date")<="2021-11-30")
       .orderBy("date")
-      .show()
+      .drop("endDate")
+      .show(50)
   }
 
 }

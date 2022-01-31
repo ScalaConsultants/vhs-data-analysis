@@ -27,7 +27,7 @@ object VHSDataAnalyzer extends Logging {
         col("action"),
         col("date")
       )
-      .where(createFilterBetweenDates(col("date"), "202111", "202111"))
+      .where(createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate))
   }
 
   def readEnrichedData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRange: CodMonthRange): DataFrame = {
