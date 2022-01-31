@@ -35,8 +35,8 @@ object DataEnricherUtil {
 
   def getDefaultTimezoneIfNull(timezone: Column): Column = coalesce(timezone, lit(DEFAULT_UTC_TIMEZONE))
 
-  def saveEnrichedData(enrichedData: DataFrame, partitions: Seq[String], path: String): Unit =
-    enrichedData
+  def saveDataframeData(dfData: DataFrame, partitions: Seq[String], path: String): Unit =
+    dfData
       .write
       .mode("overwrite")
       .partitionBy(partitions: _*)
