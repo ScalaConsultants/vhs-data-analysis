@@ -10,6 +10,25 @@ import model._
 
 
 object VHSDataAnalyzer extends Logging {
+  def readPlayerEventData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, dateRange: CodMonthRange): DataFrame = {
+    val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
+
+    val playerEventDataDf = localFileReader
+      .read(
+        "raw-data",
+        "playerEvent"
+      )
+
+    playerEventDataDf
+      .select(
+        col("userId"),
+        col("gameId"),
+        col("attribution"),
+        col("action"),
+        col("date")
+      )
+      .where(createFilterBetweenDates(col("date"), "202111", "202111"))
+  }
 
   def readEnrichedData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRange: CodMonthRange): DataFrame = {
     log.info("read vhs enriched data")
@@ -34,6 +53,7 @@ object VHSDataAnalyzer extends Logging {
       .select(
         col("userId"),
         col("gameId"),
+        col("numLevelsStarted"),
         col("numLevelsCompleted"),
         col("numAddsWatched"),
         col("numPurchasesDone"),
@@ -115,9 +135,11 @@ object VHSDataAnalyzer extends Logging {
                 }
             }
           case Retention() =>
-            val clusterData = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
+            val playerEventsData = readPlayerEventData(spark, localFileReaderConfig, dateRange).cache()
+            val enrichedDataPerDay = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
 //            NRetentionMethod.calculateRetentionByDays(clusterData)
-            NRetentionMethod.calculateRetentionByBracket(clusterData, 3)
+            //NRetentionMethod.calculateRetentionByBracket(clusterData, 3)
+            NRetentionMethod.calculateRetention2(playerEventsData, enrichedDataPerDay)
         }
 
         spark.stop()
