@@ -73,6 +73,8 @@ object NRetentionMethod {
 
   }
 
+  case class RetentionPoint(dateRetention: LocalDateTime, dayRetention: Int, retentionRate: Double)
+
   def formatDay(d: Int): String = {
     if((d/10)<1)
       s"0$d"
@@ -81,15 +83,12 @@ object NRetentionMethod {
   }
 
   def calculateRetention2(playerEvents: DataFrame, enrichedData: DataFrame): Unit = {
+    val idleTime = 7
+
     val newUsersDf =  playerEvents
       .groupBy("date")
       .agg(
         count_distinct(col("userId")) as "newUsers"
-      )
-      .select(
-        col("date"),
-        date_add(col("date"),30) as "endDate",
-        col("newUsers")
       )
       .cache()
 
@@ -103,72 +102,76 @@ object NRetentionMethod {
 
     val pivotDate = (1 to 30).map( d => s"2021-11-${formatDay(d)}")
 
-    pivotDate.foreach{ pivotDate =>
+    val monthlyRetentionPoints = pivotDate.flatMap{ pivotDate =>
       val newUsersPerDateDf =  newUsersDf
         .where(col("date") === pivotDate )
+
+      val listOfNewUsers = playerEvents
+        .where(col("date") === pivotDate)
+        .select("userId")
+        .distinct()
+        .collect()
+        .map(a => a.getString(0))
 
       if(newUsersPerDateDf.count() > 0) {
         val initialNewUsers = newUsersPerDateDf.first()
 
-        val (endDate, numberOfNewUsers) = initialNewUsers.getDate(1) -> initialNewUsers.getLong(2)
+        val (startDate, numberOfNewUsers) = (initialNewUsers.getDate(0) ,initialNewUsers.getLong(1))
 
-        val listOfNewUsers = playerEvents
-          .where(col("date") === pivotDate)
-          .select("userId").distinct()
-          .collect()
-          .map(a => a.getString(0))
+        val dateIndex = (1 to 30).map(i => (startDate.toLocalDate.plusDays(i), startDate.toLocalDate.plusDays(i+idleTime-1), i))
 
-        val activePlayersPerDay = enrichedDataPerDay
-          .where(
-            ((col("date") > pivotDate) && (col("date") <= endDate))
-              &&
-              ((col("numLevelsStarted") > 0) || (col("numLevelsCompleted") > 0))
-              && (col("userId").isin(listOfNewUsers: _*))
-          )
-          .groupBy("date")
-          .agg(
-            count_distinct(col("userId")) as "activePlayers"
-          )
+        val retentionPoints = dateIndex.map{
+          case (dateRetention, dateRetentionWithIdleTime, iRetention) =>
+            val userActivity = enrichedDataPerDay
+              .where(
+                ((col("date") >= dateRetention) && (col("date") <= dateRetentionWithIdleTime))
+                  && (col("userId").isin(listOfNewUsers: _*))
+              )
+              .groupBy("userId")
+              .agg(
+                sum("numLevelsCompleted") as "numLevelsCompleted",
+                sum("numLevelsStarted") as "numLevelsStarted"
+              )
 
 
-        val retentionByDate = activePlayersPerDay
-          .select(
-            col("date"),
-            ((col("activePlayers") / numberOfNewUsers) * 100) as "retention"
-          )
-          .orderBy("date")
+            val activePlayers = userActivity
+              .where((col("numLevelsStarted") > 0) || (col("numLevelsCompleted") > 0))
+              .count()
 
-        val retentionByDatePoints = retentionByDate
-          .collect()
-          .map { a =>
-            (
-              LocalDateTime.parse(s"${a.getDate(0)} 00:00"),
-              a.getDouble(1)
-            )
-          }
-          .collect {
-            case (Some(date), retention) => (date, retention)
-          }
-          .toList
+            val retentionValue = (activePlayers.toDouble / numberOfNewUsers) * 100
 
-        if (retentionByDatePoints.nonEmpty) {
-          val xDate = retentionByDatePoints.map(_._1)
-          val yValue = retentionByDatePoints.map(_._2)
+            RetentionPoint(LocalDateTime.parse(s"$dateRetention 00:00").get, iRetention, retentionValue)
+        }.sortBy(_.dayRetention)
 
-          val plot = Scatter(xDate, yValue).withName("Retention by Date")
+        println(s"xd2 - $pivotDate : $retentionPoints")
+        if (retentionPoints.nonEmpty) {
+          val xRetentionDay = retentionPoints.map(_.dayRetention)
+          val yValue = retentionPoints.map(_.retentionRate)
 
-          val lay = Layout().withTitle(s"Retention by Date")
-          plot.plot(s"plots/retention/retentionByDate_${pivotDate}_numberOfNewUsers_$numberOfNewUsers.html", lay, useCdn = true,
+          val plot = Scatter(xRetentionDay, yValue).withName("Retention by xDay")
+
+          val lay = Layout().withTitle(s"Retention by xDay")
+          plot.plot(s"plots/retention/retentionByxDay_pivotDate_${pivotDate}_numberOfNewUsers_$numberOfNewUsers.html", lay, useCdn = true,
             openInBrowser = false,
             addSuffixIfExists = true)
         }
+        retentionPoints.toList
+      }
+      else {
+        List.empty
       }
     }
-    newUsersDf
-      .where(col("date")<="2021-11-30")
-      .orderBy("date")
-      .drop("endDate")
-      .show(50)
+   val monthlyPointsAvgRetention = monthlyRetentionPoints.groupBy(_.dayRetention).map{ case (k, v) => (k, v.map(_.retentionRate).toList.sum/30)}.toList.sortBy(_._1)
+
+    val xRetentionDay = monthlyPointsAvgRetention.map(_._1)
+    val yValue = monthlyPointsAvgRetention.map(_._2)
+
+    val plot = Scatter(xRetentionDay, yValue).withName("Avg Retention by xDay")
+
+    val lay = Layout().withTitle(s"Retention by xDay")
+    plot.plot(s"plots/avgRetentionByMonth_codMonth_202111_idleTime_$idleTime.html", lay, useCdn = true,
+      openInBrowser = false,
+      addSuffixIfExists = true)
   }
 
 }
