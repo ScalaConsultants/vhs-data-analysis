@@ -1,14 +1,12 @@
 package methods
 
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.{lit, _}
+import org.apache.spark.sql.functions._
 import plotly.Plotly.TraceOps
 import plotly.Scatter
 import plotly.element.LocalDateTime
 import plotly.layout.Layout
-
-import java.sql.Date
-import java.time.LocalDate
+import java.time.{LocalDate, YearMonth}
 
 object NRetentionMethod {
 
@@ -24,7 +22,6 @@ object NRetentionMethod {
     val lay = Layout().withTitle(s"Retention by Date")
     plot.plot(s"plots/retentionByDate.html", lay)
   }
-
 
   def calculateRetentionByDays(dataInput: DataFrame): Unit = {
 
@@ -52,7 +49,6 @@ object NRetentionMethod {
 
     val (initialDate, numberOfUsers) =  first.getDate(0).toLocalDate -> first.getLong(1)
     val finalDate =  initialUsers.orderBy(desc("date")).first().getDate(0).toLocalDate
-
 
     def go(lb: LocalDate, ub: LocalDate, finalDate: LocalDate): List[RetentionByDate] = {
       if(ub.isAfter(finalDate))
@@ -82,8 +78,7 @@ object NRetentionMethod {
       s"$d"
   }
 
-  def calculateRetention2(playerEvents: DataFrame, enrichedData: DataFrame): Unit = {
-    val idleTime = 7
+  def calculateRetention2(playerEvents: DataFrame, enrichedData: DataFrame, startMonth: YearMonth, nDays: Int, idleTime: Int): Unit = {
 
     val newUsersDf =  playerEvents
       .groupBy("date")
@@ -100,7 +95,7 @@ object NRetentionMethod {
       )
       .cache()
 
-    val pivotDate = (1 to 30).map( d => s"2021-11-${formatDay(d)}")
+    val pivotDate = (1 to nDays).map(d => s"${startMonth.getYear}-${startMonth.getMonth}-${formatDay(d)}")
 
     val monthlyRetentionPoints = pivotDate.flatMap{ pivotDate =>
       val newUsersPerDateDf =  newUsersDf
@@ -118,7 +113,7 @@ object NRetentionMethod {
 
         val (startDate, numberOfNewUsers) = (initialNewUsers.getDate(0) ,initialNewUsers.getLong(1))
 
-        val dateIndex = (1 to 30).map(i => (startDate.toLocalDate.plusDays(i), startDate.toLocalDate.plusDays(i+idleTime-1), i))
+        val dateIndex = (1 to nDays).map(i => (startDate.toLocalDate.plusDays(i), startDate.toLocalDate.plusDays(i+idleTime), i))
 
         val retentionPoints = dateIndex.map{
           case (dateRetention, dateRetentionWithIdleTime, iRetention) =>
@@ -161,7 +156,8 @@ object NRetentionMethod {
         List.empty
       }
     }
-   val monthlyPointsAvgRetention = monthlyRetentionPoints.groupBy(_.dayRetention).map{ case (k, v) => (k, v.map(_.retentionRate).toList.sum/30)}.toList.sortBy(_._1)
+
+   val monthlyPointsAvgRetention = monthlyRetentionPoints.groupBy(_.dayRetention).map{ case (k, v) => (k, v.map(_.retentionRate).toList.sum/nDays)}.toList.sortBy(_._1)
 
     val xRetentionDay = monthlyPointsAvgRetention.map(_._1)
     val yValue = monthlyPointsAvgRetention.map(_._2)
@@ -169,7 +165,7 @@ object NRetentionMethod {
     val plot = Scatter(xRetentionDay, yValue).withName("Avg Retention by xDay")
 
     val lay = Layout().withTitle(s"Retention by xDay")
-    plot.plot(s"plots/avgRetentionByMonth_codMonth_202111_idleTime_$idleTime.html", lay, useCdn = true,
+    plot.plot(s"plots/avgRetentionByMonth_codMonth_${startMonth}_idleTime_$idleTime.html", lay, useCdn = true,
       openInBrowser = false,
       addSuffixIfExists = true)
   }

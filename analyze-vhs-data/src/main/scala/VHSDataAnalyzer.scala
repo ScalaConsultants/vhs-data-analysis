@@ -8,9 +8,11 @@ import config._
 import methods._
 import model._
 
+import java.time.{LocalDate, Year, YearMonth}
+
 
 object VHSDataAnalyzer extends Logging {
-  def readPlayerEventData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, dateRange: CodMonthRange): DataFrame = {
+  def readPlayerEventData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, dateRange: Option[CodMonthRange]): DataFrame = {
     val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
 
     val playerEventDataDf = localFileReader
@@ -19,7 +21,7 @@ object VHSDataAnalyzer extends Logging {
         "playerEvent"
       )
 
-    playerEventDataDf
+    val df = playerEventDataDf
       .select(
         col("userId"),
         col("gameId"),
@@ -27,17 +29,21 @@ object VHSDataAnalyzer extends Logging {
         col("action"),
         col("date")
       )
-      .where(createFilterBetweenDates(col("date"), dateRange.fromDate, dateRange.toDate))
+
+      if(dateRange.isDefined)
+        df.where(createFilterBetweenDates(col("date"), dateRange.get.fromDate, dateRange.get.toDate))
+      else
+        df
   }
 
-  def readEnrichedData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRange: CodMonthRange): DataFrame = {
+  def readEnrichedData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRangeOpt: Option[CodMonthRange]): DataFrame = {
     log.info("read vhs enriched data")
 
     val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
 
-    val (enrichedDataSchema, filterByPartition) = behavior match {
-      case Daily => (EnrichedDataPerDay.generateSchema, createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate))
-      case _ => (EnrichedDataPerMonth.generateSchema, createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate))
+    val enrichedDataSchema = behavior match {
+      case Daily => EnrichedDataPerDay.generateSchema
+      case _ => EnrichedDataPerMonth.generateSchema
     }
     val fileNameSource = getFileNameFromBehavior(behavior)
     val partitionSource = getPartitionSourceFromBehavior(behavior)
@@ -49,7 +55,7 @@ object VHSDataAnalyzer extends Logging {
         enrichedDataSchema
       )
 
-    enrichedDataDf
+    val df = enrichedDataDf
       .select(
         col("userId"),
         col("gameId"),
@@ -62,19 +68,29 @@ object VHSDataAnalyzer extends Logging {
         col("flagOrganic"),
         col(partitionSource)
       )
-      .where(filterByPartition(col(partitionSource)))
+
+    dateRangeOpt match {
+      case None => df
+      case Some(dateRange) =>
+        val filterByPartition = behavior match {
+          case Daily =>  createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
+          case _ =>  createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate)
+        }
+
+        df.where(filterByPartition(col(partitionSource)))
+
+    }
+
+
+
+
   }
 
-  def readClusterData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRange: CodMonthRange): DataFrame = {
+  def readClusterData(spark: SparkSession, localFileReaderConfig: LocalFileReaderConfig, behavior: Behavior, dateRangeOpt: Option[CodMonthRange]): DataFrame = {
     log.info("read cluster data")
 
     val localFileReader = LocalFileReader(spark, localFileReaderConfig.mainPath)
-    val filterBetweenDates = createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
 
-    val filterByPartition = behavior match {
-      case Daily => createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
-      case _ => createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate)
-    }
 
     val fileNameSource = "cluster-data"
     val partitionSource = getPartitionSourceFromBehavior(behavior)
@@ -85,7 +101,7 @@ object VHSDataAnalyzer extends Logging {
         fileNameSource
       )
 
-    enrichedDataDf
+    val df = enrichedDataDf
       .select(
         col("userId"),
         col("gameId"),
@@ -98,7 +114,18 @@ object VHSDataAnalyzer extends Logging {
         col("cluster"),
         col(partitionSource)
       )
-      .where(filterByPartition(col(partitionSource)))
+
+    dateRangeOpt match {
+      case None => df
+      case Some(dateRange) =>
+        val filterBetweenDates = createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
+        val filterByPartition = behavior match {
+          case Daily => createFilterBetweenDates(_, dateRange.fromDate, dateRange.toDate)
+          case _ => createFilterBetweenCodMonths(_, dateRange.fromDate, dateRange.toDate)
+        }
+        df.where(filterByPartition(col(partitionSource)))
+    }
+
   }
 
   def main(args: Array[String]): Unit = {
@@ -134,12 +161,17 @@ object VHSDataAnalyzer extends Logging {
                   case _ => log.warn(s"LTV behaviour not supported ")
                 }
             }
-          case Retention() =>
-            val playerEventsData = readPlayerEventData(spark, localFileReaderConfig, dateRange).cache()
-            val enrichedDataPerDay = readEnrichedData(spark, localFileReaderConfig, Daily, dateRange).cache()
-//            NRetentionMethod.calculateRetentionByDays(clusterData)
-            //NRetentionMethod.calculateRetentionByBracket(clusterData, 3)
-            NRetentionMethod.calculateRetention2(playerEventsData, enrichedDataPerDay)
+          case Retention(startMonth, idleTime) =>
+
+            val initialDate = LocalDate.of(startMonth.getYear, startMonth.getMonth, 1)
+            val days = startMonth.getMonth.length(Year.isLeap(startMonth.getYear))
+            val finalDate = initialDate.plusDays(days)
+            val range = CodMonthRange(initialDate.toString, finalDate.toString)
+
+            val playerEventsData = readPlayerEventData(spark, localFileReaderConfig, Some(range)).cache()
+            val enrichedDataPerDay = readEnrichedData(spark, localFileReaderConfig, Daily, Some(range)).cache()
+
+            NRetentionMethod.calculateRetention2(playerEventsData, enrichedDataPerDay, startMonth, days, idleTime)
         }
 
         spark.stop()

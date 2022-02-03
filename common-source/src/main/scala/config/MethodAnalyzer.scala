@@ -1,5 +1,7 @@
 package config
 
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import scala.util.matching.Regex
 
 sealed trait MethodAnalyzer
@@ -23,7 +25,7 @@ object LTVAnalyzer {
 }
 
 
-final case class Retention() extends MethodAnalyzer
+final case class Retention(startMonth: YearMonth, idleTime: Int = 0) extends MethodAnalyzer
 
 object Retention {
   def methodLabel:String = "retention"
@@ -72,8 +74,11 @@ object MethodAnalyzer {
     }
 
   private def getRetentionMethodFromOpts(mapOpts: Map[String, String]): Either[String, Retention] = {
-    mapOpts.get("attribute").flatMap(LTVAttribute.fromString) match {
-      case _ =>  Right(Retention())
+    val formatter = DateTimeFormatter.ofPattern("yyyyMM")
+    (mapOpts.get("startMonth"), mapOpts.get("idleTime")) match {
+      case (Some(yearMonth), None) => Right(Retention(YearMonth.parse(yearMonth, formatter)))
+      case (Some(yearMonth), Some(idleTime)) => Right(Retention(YearMonth.parse(yearMonth, formatter), idleTime.toInt))
+      case _ => Left("invalid inputs for Retention Method")
     }
   }
 

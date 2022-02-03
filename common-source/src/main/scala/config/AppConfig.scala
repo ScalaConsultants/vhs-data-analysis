@@ -6,7 +6,7 @@ sealed trait AppConfig
 
 final case class EnricherAppConfig(readerConfig: ReaderConfig, behavior: Behavior, dateRange: CodMonthRange) extends AppConfig
 
-final case class AnalyzerAppConfig(readerConfig: ReaderConfig, method: MethodAnalyzer, behavior: Behavior, dateRange: CodMonthRange) extends AppConfig
+final case class AnalyzerAppConfig(readerConfig: ReaderConfig, method: MethodAnalyzer, behavior: Behavior, dateRange: Option[CodMonthRange]) extends AppConfig
 
 object AppConfig extends CommandLineParser {
   type ExMsg = String
@@ -43,8 +43,13 @@ object AppConfig extends CommandLineParser {
     val dateRangeOpt = CodMonthRange.getDateRangeFromOpts(mapOptions)
 
     (readerConfigOpt, methodOpt, behaviorOpt, dateRangeOpt) match {
+      case (Right(readerConfig), Right(method), Right(behavior), Left(e) ) =>
+        method match {
+          case _: Retention => Right(AnalyzerAppConfig(readerConfig, method, behavior, None))
+          case _ => Left(e)
+        }
       case (Right(readerConfig), Right(method), Right(behavior), Right(codMonthRange)) =>
-        Right(AnalyzerAppConfig(readerConfig, method, behavior, codMonthRange))
+        Right(AnalyzerAppConfig(readerConfig, method, behavior, Some(codMonthRange)))
       case _ =>
         val exLoadAppConfMsg = List(
           readerConfigOpt,
@@ -52,7 +57,7 @@ object AppConfig extends CommandLineParser {
           behaviorOpt,
           dateRangeOpt
         )
-          .collect{
+          .collect {
             case Left(exMsg) => exMsg
           }
           .mkString(", ")
