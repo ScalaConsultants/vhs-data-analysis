@@ -95,7 +95,7 @@ object NRetentionMethod {
       )
       .cache()
 
-    val pivotDate = (1 to nDays).map(d => s"${startMonth.getYear}-${startMonth.getMonth}-${formatDay(d)}")
+    val pivotDate = (1 to nDays).map(d => s"${startMonth.getYear}-${startMonth.getMonthValue}-${formatDay(d)}")
 
     val monthlyRetentionPoints = pivotDate.flatMap{ pivotDate =>
       val newUsersPerDateDf =  newUsersDf

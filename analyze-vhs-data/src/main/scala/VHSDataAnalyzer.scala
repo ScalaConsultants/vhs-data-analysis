@@ -163,10 +163,14 @@ object VHSDataAnalyzer extends Logging {
             }
           case Retention(startMonth, idleTime) =>
 
+
+            def printMonth(month: Int): String =
+              if (month < 10) s"0$month" else month.toString
+
             val initialDate = LocalDate.of(startMonth.getYear, startMonth.getMonth, 1)
             val days = startMonth.getMonth.length(Year.isLeap(startMonth.getYear))
             val finalDate = initialDate.plusDays(days)
-            val range = CodMonthRange(initialDate.toString, finalDate.toString)
+            val range = CodMonthRange(s"${initialDate.getYear}${printMonth(initialDate.getMonthValue)}", s"${finalDate.getYear}${printMonth(finalDate.getMonthValue)}")
 
             val playerEventsData = readPlayerEventData(spark, localFileReaderConfig, Some(range)).cache()
             val enrichedDataPerDay = readEnrichedData(spark, localFileReaderConfig, Daily, Some(range)).cache()
