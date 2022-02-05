@@ -1,5 +1,7 @@
 package config
 
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import scala.util.matching.Regex
 
 sealed trait MethodAnalyzer
@@ -22,6 +24,12 @@ object LTVAnalyzer {
   def methodLabel:String = "ltv"
 }
 
+
+final case class Retention(startMonth: YearMonth, idleTime: Int = 0) extends MethodAnalyzer
+
+object Retention {
+  def methodLabel:String = "retention"
+}
 
 sealed trait LTVAttribute
 
@@ -65,12 +73,21 @@ object MethodAnalyzer {
       case _ => Left("invalid inputs for LTV method")
     }
 
+  private def getRetentionMethodFromOpts(mapOpts: Map[String, String]): Either[String, Retention] = {
+    val formatter = DateTimeFormatter.ofPattern("yyyyMM")
+    (mapOpts.get("startMonth"), mapOpts.get("idleTime")) match {
+      case (Some(yearMonth), None) => Right(Retention(YearMonth.parse(yearMonth, formatter)))
+      case (Some(yearMonth), Some(idleTime)) => Right(Retention(YearMonth.parse(yearMonth, formatter), idleTime.toInt))
+      case _ => Left("invalid inputs for Retention Method")
+    }
+  }
 
   def getAnalyzerMethodFromOpts(mapOpts: Map[String, String]): Either[String, MethodAnalyzer] = {
     mapOpts.get("method")  match {
       case Some(method) if method.equalsIgnoreCase(ElbowAnalyzer.methodLabel) =>  getElbowMethodFromOpts(mapOpts)
       case Some(method) if method.equalsIgnoreCase(KMeansAnalyzer.methodLabel) =>  getKMeansMethodFromOpts(mapOpts)
       case Some(method) if method.equalsIgnoreCase(LTVAnalyzer.methodLabel) => getLTVMethodFromOpts(mapOpts)
+      case Some(method) if method.equalsIgnoreCase(Retention.methodLabel) => getRetentionMethodFromOpts(mapOpts)
       case _ => Left("invalid method analyzer")
     }
   }
