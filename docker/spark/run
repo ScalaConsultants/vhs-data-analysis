@@ -6,5 +6,9 @@ set -e
 
 cd ../..
 
+mkdir -p plots/kmeans \
+    && mkdir -p plots/ltv \
+    && mkdir -p plots/retention
+
 # shellcheck disable=SC2046
 docker run -t -d -p 8080:8080 --name="${SPARK_CONTAINER_NAME}" -v $(pwd):"${SHARED_WORKSPACE}" "${SPARK_IMAGE}"
