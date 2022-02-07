@@ -15,11 +15,11 @@ object DataEnricherUtil {
 
   def isLevelStarted: Column = col("status") === LEVEL_STARTED
 
-  def isAddWatched: Column = col("status") === ADD_WATCHED
+  def isAdWatched: Column = col("status") === ADD_WATCHED
 
-  def isAddIgnored: Column = col("status") === ADD_IGNORED
+  def isAdIgnored: Column = col("status") === ADD_IGNORED
 
-  def isAddProposed: Column = col("status") === ADD_PROPOSED
+  def isAdProposed: Column = col("status") === ADD_PROPOSED
 
   def isPurchaseDone: Column = col("status") === PURCHASE_DONE
 

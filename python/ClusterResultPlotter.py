@@ -16,7 +16,7 @@ def plotPoints(pointsRow, colorPoints):
 def main():
 	dfClusterResults = spark.read.parquet("data-models/output/cluster-data")
 
-	#dfClusterResults = dfClusterResults.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "flagOrganic", "cluster")
+	#dfClusterResults = dfClusterResults.select("numLevelsCompleted", "numAdsWatched", "numPurchasesDone", "flagOrganic", "cluster")
 
 	pca = PCA(k=2, inputCol="scaledFeatures", outputCol="pcaFeatures")
 	#featureVector

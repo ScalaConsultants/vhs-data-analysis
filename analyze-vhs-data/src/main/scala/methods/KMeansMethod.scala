@@ -10,7 +10,7 @@ import utils.KMeansPlotter
 object KMeansMethod {
 
   def showMetrics(enrichedDf: DataFrame): Unit = {
-    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDayNumber", "flagOrganic")
+    val metricsDf = enrichedDf.select("numLevelsCompleted", "numAdsWatched", "numPurchasesDone", "partOfDayNumber", "flagOrganic")
     metricsDf
       .summary("count", "min", "mean", "max")
       .show()
@@ -45,7 +45,7 @@ object KMeansMethod {
 
   def getModelForKMeans(kmeansInput: DataFrame, kClusters: Int, kIter: Int = 30): PipelineModel ={
     val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array("numLevelsCompleted", "numAddsWatched", "numPurchasesDone", "partOfDayNumber" ,"flagOrganic"))
+      .setInputCols(Array("numLevelsCompleted", "numAdsWatched", "numPurchasesDone", "partOfDayNumber" ,"flagOrganic"))
       .setOutputCol("featureVector")
 
     val scaler = new StandardScaler()

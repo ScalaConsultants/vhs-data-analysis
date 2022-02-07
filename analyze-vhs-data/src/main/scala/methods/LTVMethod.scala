@@ -66,7 +66,7 @@ object LTVMethod {
   def calculateAndSaveLTVByCluster(kmResult: DataFrame): Unit = {
     val ltv = kmResult
       .groupBy("cluster")
-      .agg(count_distinct(col("userId")) as "uniqueUsers", sum("numAddsWatched").multiply(0.015) as "revenue")
+      .agg(count_distinct(col("userId")) as "uniqueUsers", sum("numAdsWatched").multiply(0.015) as "revenue")
       .withColumn("ltv", col("revenue").divide(col("uniqueUsers")))
       .select(col("ltv"), col("cluster"))
 
@@ -78,7 +78,7 @@ object LTVMethod {
   def calculateLTVByUserDaily(dataInput: DataFrame): DataFrame = {
     val lifetimeWithRevenuePerUserDf =  dataInput.groupBy("userId", "date").agg(
       count(col("partOfDay")) as "lifetime",
-      sum("numAddsWatched").multiply(0.015) as "revenue"
+      sum("numAdsWatched").multiply(0.015) as "revenue"
     )
 
     val dauPerDayDf =  dataInput.groupBy("date").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
@@ -181,7 +181,7 @@ object LTVMethod {
 
     val lifetimeWithRevenuePerUserDf =  dateInputWithCodeDate.groupBy("userId", "codeMonth").agg(
       count_distinct(col("date")) as "lifetime",
-      sum("numAddsWatched").multiply(0.015) as "revenue"
+      sum("numAdsWatched").multiply(0.015) as "revenue"
     )
     val dauPerMonthDf =  dateInputWithCodeDate.groupBy("codeMonth").agg(count_distinct(col("numLevelsCompleted").gt(0)) as "activeUsersPerPeriod")
 

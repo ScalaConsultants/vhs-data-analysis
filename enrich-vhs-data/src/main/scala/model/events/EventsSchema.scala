@@ -10,7 +10,7 @@ object EventsSchema {
 
   private val listOfPlayerBehaviorEvents: List[SchemaGenerator] = List(
     LevelEvent,
-    AddEvent,
+    AdEvent,
     PurchaseEvent
   )
 

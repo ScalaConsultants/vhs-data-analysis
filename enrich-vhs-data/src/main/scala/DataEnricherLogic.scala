@@ -33,9 +33,9 @@ object DataEnricherLogic extends Logging {
     )
   }
 
-  def cleanAddsData(playerBehaviorDf: DataFrame): DataFrame = {
-    val addsEvents = playerBehaviorDf.where(col("adType").isNotNull)
-    addsEvents.select(
+  def cleanAdsData(playerBehaviorDf: DataFrame): DataFrame = {
+    val adsEvents = playerBehaviorDf.where(col("adType").isNotNull)
+    adsEvents.select(
       trim(col("userId")) as "userId",
       trim(col("gameId")) as "gameId",
       col("placementId"),
@@ -80,13 +80,13 @@ object DataEnricherLogic extends Logging {
         sum(when(isLevelStarted, lit(1)).otherwise(lit(0))) as "numLevelsStarted"
       )
 
-  def enrichAddsData(addsCleanedDf: DataFrame): DataFrame =
-    addsCleanedDf
+  def enrichAdsData(adsCleanedDf: DataFrame): DataFrame =
+    adsCleanedDf
       .groupBy("userId", "gameId", "date", "hourOfDay")
       .agg(
-        sum(when(isAddWatched, lit(1)).otherwise(lit(0))) as "numAddsWatched",
-        sum(when(isAddIgnored, lit(1)).otherwise(lit(0))) as "numAddsIgnored",  //-- Bug in the game
-        sum(when(isAddProposed, lit(1)).otherwise(lit(0))) as "numAddsProposed"  //-- Not implemented yet in the game
+        sum(when(isAdWatched, lit(1)).otherwise(lit(0))) as "numAdsWatched",
+        sum(when(isAdIgnored, lit(1)).otherwise(lit(0))) as "numAdsIgnored",  //-- Bug in the game
+        sum(when(isAdProposed, lit(1)).otherwise(lit(0))) as "numAdsProposed"  //-- Not implemented yet in the game
       )
 
   def enrichPurchasesData(purchasesCleanedDf: DataFrame): DataFrame =
@@ -106,22 +106,22 @@ object DataEnricherLogic extends Logging {
 
     val playersCleanedDf = cleanPlayersData(playerInfoData)
     val levelsCleanedDf = cleanLevelsData(playerBehaviorData)
-    val addsCleanedDf = cleanAddsData(playerBehaviorData)
+    val adsCleanedDf = cleanAdsData(playerBehaviorData)
     val purchasesCleanedDf = cleanPurchasesData(playerBehaviorData)
 
     saveDataframeData(playersCleanedDf, Seq("date"), "data/output/raw-data/playerEvent")
     saveDataframeData(levelsCleanedDf, Seq("date"), "data/output/raw-data/levelEvent")
-    saveDataframeData(addsCleanedDf, Seq("date"), "data/output/raw-data/adEvent")
+    saveDataframeData(adsCleanedDf, Seq("date"), "data/output/raw-data/adEvent")
     saveDataframeData(purchasesCleanedDf, Seq("date"), "data/output/raw-data/purchaseEvent")
 
     val playersEnrichDataDf = enrichPlayersData(playersCleanedDf)
     val levelsEnrichDataDf = enrichLevelsData(levelsCleanedDf)
-    val addsEnrichDataDf = enrichAddsData(addsCleanedDf)
+    val adsEnrichDataDf = enrichAdsData(adsCleanedDf)
     val purchasesEnrichDataDf = enrichPurchasesData(purchasesCleanedDf)
 
     val enrichedPlayersDataDf = levelsEnrichDataDf
       .join(playersEnrichDataDf, Seq("userId", "gameId"), "left_outer")
-      .join(addsEnrichDataDf, Seq("userId", "gameId", "date", "hourOfDay"), "left_outer")
+      .join(adsEnrichDataDf, Seq("userId", "gameId", "date", "hourOfDay"), "left_outer")
       .join(purchasesEnrichDataDf, Seq("userId", "gameId", "date", "hourOfDay"), "left_outer")
 
     val enrichedDataPerHourOfDayDf = enrichedPlayersDataDf.select(
@@ -131,9 +131,9 @@ object DataEnricherLogic extends Logging {
       col("dateRegistration"),
       coalesce(col("numLevelsCompleted"), lit(0)) as "numLevelsCompleted",
       coalesce(col("numLevelsStarted"), lit(0)) as "numLevelsStarted",
-      coalesce(col("numAddsWatched"), lit(0)) as "numAddsWatched",
-      coalesce(col("numAddsIgnored"), lit(0)) as "numAddsIgnored",
-      coalesce(col("numAddsProposed"), lit(0)) as "numAddsProposed",
+      coalesce(col("numAdsWatched"), lit(0)) as "numAdsWatched",
+      coalesce(col("numAdsIgnored"), lit(0)) as "numAdsIgnored",
+      coalesce(col("numAdsProposed"), lit(0)) as "numAdsProposed",
       coalesce(col("numPurchasesDone"), lit(0)) as "numPurchasesDone",
       coalesce(col("amountPurchasesDoneDol"), lit(0)) as "amountPurchasesDoneDol",
       coalesce(col("numPurchasesRejected"), lit(0)) as "numPurchasesRejected",
@@ -156,9 +156,9 @@ object DataEnricherLogic extends Logging {
         min("dateRegistration") as "dateRegistration",
         sum("numLevelsCompleted") as "numLevelsCompleted",
         sum("numLevelsStarted") as "numLevelsStarted",
-        sum("numAddsWatched") as "numAddsWatched",
-        sum("numAddsIgnored") as "numAddsIgnored",
-        sum("numAddsProposed") as "numAddsProposed",
+        sum("numAdsWatched") as "numAdsWatched",
+        sum("numAdsIgnored") as "numAdsIgnored",
+        sum("numAdsProposed") as "numAdsProposed",
         sum("numPurchasesDone") as "numPurchasesDone",
         sum("amountPurchasesDoneDol") as "amountPurchasesDoneDol",
         sum("numPurchasesRejected") as "numPurchasesRejected",
@@ -187,9 +187,9 @@ object DataEnricherLogic extends Logging {
         min("dateRegistration") as "dateRegistration",
         sum("numLevelsCompleted") as "numLevelsCompleted",
         sum("numLevelsStarted") as "numLevelsStarted",
-        sum("numAddsWatched") as "numAddsWatched",
-        sum("numAddsIgnored") as "numAddsIgnored",
-        sum("numAddsProposed") as "numAddsProposed",
+        sum("numAdsWatched") as "numAdsWatched",
+        sum("numAdsIgnored") as "numAdsIgnored",
+        sum("numAdsProposed") as "numAdsProposed",
         sum("numPurchasesDone") as "numPurchasesDone",
         sum("amountPurchasesDoneDol") as "amountPurchasesDoneDol",
         sum("numPurchasesRejected") as "numPurchasesRejected",

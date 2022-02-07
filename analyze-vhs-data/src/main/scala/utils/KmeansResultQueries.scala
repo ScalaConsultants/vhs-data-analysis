@@ -46,10 +46,10 @@ object KmeansResultQueries {
   }
 
   def numberOfAdsWatchedByCluster(df: DataFrame): Seq[Tuple3[String, String, Double]] = {
-    df.groupBy("cluster", "partOfDay").avg("numAddsWatched").collect().map { r =>
+    df.groupBy("cluster", "partOfDay").avg("numAdsWatched").collect().map { r =>
       val i0 = r.fieldIndex("cluster")
       val i1 = r.fieldIndex("partOfDay")
-      val i2 = r.fieldIndex("avg(numAddsWatched)")
+      val i2 = r.fieldIndex("avg(numAdsWatched)")
 
       val cluster = r.getInt(i0).toString
 
