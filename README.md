@@ -63,7 +63,7 @@ How to execute locally the vhs-data-analyzer module (jar 2)
    --k=6
 > 
 - LTV method to calculate the value of users per day
-> /home/segundocruz/Documents/Scalac/spark-3.2.0-bin-hadoop3.2/bin/spark-submit \
+> spark-submit \
    --class "VHSDataAnalyzer" \
    --master local[4] \
    analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
@@ -77,7 +77,7 @@ How to execute locally the vhs-data-analyzer module (jar 2)
    --attribute=[user | cluster]
 
 - Retention method to analyze the retention for all the days of 1 month
-> /home/segundocruz/Documents/Scalac/spark-3.2.0-bin-hadoop3.2/bin/spark-submit \
+> spark-submit \
    --class "VHSDataAnalyzer" \
    --master local[4] \
    analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
