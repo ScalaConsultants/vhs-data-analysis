@@ -23,6 +23,8 @@ object ElbowMethod {
       Scatter(xCluster, yCostTraining).withName("CostTraining vs k")
     )
     val lay = Layout().withTitle("Elbow method")
-    plot.plot(s"plots/elbowFrom${fromK}To${toK}", lay)
+    plot.plot(s"plots/elbowFrom${fromK}To${toK}.html", lay, useCdn = true,
+      openInBrowser = false,
+      addSuffixIfExists = true)
   }
 }

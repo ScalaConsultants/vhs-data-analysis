@@ -41,6 +41,7 @@ How to execute locally the vhs-data-analyzer module (jar 2)
     --behavior=[daily | monthly] \
     --mainPath=data/output \
     --folderName=enriched-data \
+    --gameId=LOVE_COLORS \
     --fromDate=202101 \
     --toDate=202112 \
     --method=elbow \
@@ -55,7 +56,35 @@ How to execute locally the vhs-data-analyzer module (jar 2)
    --behavior=[daily | monthly] \
    --mainPath=data/output \
    --folderName=enriched-data \
+   --gameId=LOVE_COLORS \
    --fromDate=202101 \
    --toDate=202112 \
    --method=k-means \
-   --k=8
+   --k=6
+> 
+- LTV method to calculate the value of users per day
+> /home/segundocruz/Documents/Scalac/spark-3.2.0-bin-hadoop3.2/bin/spark-submit \
+   --class "VHSDataAnalyzer" \
+   --master local[4] \
+   analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
+   --behavior=[daily | monthly] \
+   --mainPath=data-models \
+   --folderName=output \
+   --gameId=LOVE_COLORS \
+   --fromDate=202101 \
+   --toDate=202112 \
+   --method=ltv \
+   --attribute=[user | cluster]
+
+- Retention method to analyze the retention for all the days of 1 month
+> /home/segundocruz/Documents/Scalac/spark-3.2.0-bin-hadoop3.2/bin/spark-submit \
+   --class "VHSDataAnalyzer" \
+   --master local[4] \
+   analyze-vhs-data/target/scala-2.12/analyze-vhs-data.jar \
+   --behavior=daily \
+   --mainPath=data/output \
+   --folderName=enriched-data \
+   --gameId=LOVE_COLORS \
+   --method=retention \
+   --startMonth=202110 \
+   --idleTime=0

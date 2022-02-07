@@ -27,7 +27,7 @@ data/
 data-models/
 
 #plots
-plots/
+*.html
 
 # intellij idea
 *.log

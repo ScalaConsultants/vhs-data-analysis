@@ -1,6 +1,6 @@
 package methods
 
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions._
 import plotly._
 import plotly.layout._
@@ -25,7 +25,9 @@ object LTVMethod {
       Bar(xCluster, yLTV).withName("Cluster vs LTV")
     )
     val lay = Layout().withTitle("LTV method by Cluster")
-    plot.plot(s"plots/ltvByCluster.html", lay)
+    plot.plot(s"plots/ltv/ltvByCluster.html", lay, useCdn = true,
+      openInBrowser = false,
+      addSuffixIfExists = true)
   }
 
   def plotLTVByDate(points: List[LTVPerDate], pointsByCluster: List[(List[LTVPerDate], Int)], aggOperation: String): Unit = {
@@ -41,7 +43,9 @@ object LTVMethod {
     val plot = Seq(Scatter(xDate, yLTV).withName("LTV general"))++ScattersByClusters
 
     val lay = Layout().withTitle(s"Date vs $aggOperation LTV")
-    plot.plot(s"plots/ltvByDate_$aggOperation.html", lay)
+    plot.plot(s"plots/ltv/ltvByDate_$aggOperation.html", lay, useCdn = true,
+      openInBrowser = false,
+      addSuffixIfExists = true)
   }
 
 
@@ -54,7 +58,9 @@ object LTVMethod {
       Scatter(xCodMonth, yLTV)
     )
     val lay = Layout().withTitle(s"CodMonth vs $aggOperation LTV")
-    plot.plot(s"plots/ltvByMonth_$aggOperation.html", lay)
+    plot.plot(s"plots/ltv/ltvByMonth_$aggOperation.html", lay, useCdn = true,
+      openInBrowser = false,
+      addSuffixIfExists = true)
   }
 
   def calculateAndSaveLTVByCluster(kmResult: DataFrame): Unit = {
