@@ -1,2 +1,9 @@
+.github
+docker
 docker/**
+python
 python/**
+.dockerignore
+.gitignore
+build.sbt
+README.md
