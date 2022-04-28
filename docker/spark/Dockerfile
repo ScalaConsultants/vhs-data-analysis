@@ -25,7 +25,7 @@ RUN wget --no-verbose -O apache-spark.tgz "https://archive.apache.org/dist/spark
 ENV PATH=$SPARK_HOME/bin:$PATH
 ENV SHARED_WORKSPACE /opt/workspace
 
-#USER $DEVUSER
+USER $DEVUSER
 
 WORKDIR ${SHARED_WORKSPACE}
 
