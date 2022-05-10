@@ -33,5 +33,4 @@ COPY . /${SHARED_WORKSPACE}
 
 EXPOSE 8080
 
-ENTRYPOINT ["spark-submit", "--class", "VHSDataEnricher", "--master", "local[4]", "enrich-vhs-data/target/scala-2.12/enrich-vhs-data.jar", "--behavior=daily", "--database=vhs" ,"--collection=events"]
-CMD ["--mongoUri=${MONGO_URI}", "--fromDate=${DATE}", "--toDate=${DATE}"]
+CMD ["/bin/sh", "-c", "spark-submit --class VHSDataEnricher --master local[4] enrich-vhs-data/target/scala-2.12/enrich-vhs-data.jar --behavior=daily --database=vhs --collection=events --mongoUri=${MONGO_URI} --fromDate=${DATE} --toDate=${DATE}"]
